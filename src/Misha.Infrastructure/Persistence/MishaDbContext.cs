@@ -16,6 +16,8 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         application.Property(x => x.ApplicantReference).HasMaxLength(200).IsRequired();
         application.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         application.Property(x => x.CreatedAtUtc).IsRequired();
+        application.Property(x => x.RefusalReason).HasMaxLength(1000);
         application.HasIndex(x => x.ApplicantReference);
+        application.HasIndex(x => x.Status);
     }
 }
