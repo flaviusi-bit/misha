@@ -1,4 +1,5 @@
 using Misha.Domain.Payments;
+using Xunit;
 
 namespace Misha.Domain.Tests;
 
