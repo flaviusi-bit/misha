@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MishaApplication = Misha.Domain.Applications.Application;
 using Misha.Domain.Decisions;
 using Misha.Domain.Documents;
+using Misha.Domain.Etas;
 using Misha.Domain.Payments;
 using Misha.Domain.Watchlists;
 
@@ -15,6 +16,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
     public DbSet<PassportDocument> PassportDocuments => Set<PassportDocument>();
     public DbSet<WatchlistCheck> WatchlistChecks => Set<WatchlistCheck>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<Eta> Etas => Set<Eta>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -86,5 +88,18 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         payment.Property(x => x.CreatedAtUtc).IsRequired();
         payment.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
         payment.HasIndex(x => x.ProviderReference);
+
+        var eta = modelBuilder.Entity<Eta>();
+        eta.ToTable("etas");
+        eta.HasKey(x => x.Id);
+        eta.Property(x => x.EtaNumber).HasMaxLength(32).IsRequired();
+        eta.Property(x => x.VerificationTokenHash).HasMaxLength(64).IsRequired();
+        eta.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+        eta.Property(x => x.IssuedAtUtc).IsRequired();
+        eta.Property(x => x.ExpiresAtUtc).IsRequired();
+        eta.Property(x => x.RevocationReason).HasMaxLength(1000);
+        eta.HasIndex(x => x.ApplicationId).IsUnique();
+        eta.HasIndex(x => x.EtaNumber).IsUnique();
+        eta.HasIndex(x => x.VerificationTokenHash).IsUnique();
     }
 }
