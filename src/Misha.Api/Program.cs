@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Misha.Api;
 using Misha.Application.Applications;
 using Misha.Application.Documents;
+using Misha.Application.Etas;
 using Misha.Application.Policy;
 using Misha.Application.Watchlists;
 using Misha.Domain.Documents;
@@ -41,6 +42,7 @@ builder.Services.AddSingleton<IPolicyEngine, DefaultPolicyEngine>();
 builder.Services.AddScoped<PolicyService>();
 Misha.Api.DecisionServiceRegistration.AddDecisionEngine(builder.Services);
 PaymentServiceRegistration.AddPaymentServices(builder.Services);
+EtaServiceRegistration.AddEtaServices(builder.Services);
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
 builder.Services
@@ -61,6 +63,7 @@ app.UseAuthorization();
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
 app.MapPaymentEndpoints();
+app.MapEtaEndpoints();
 
 app.MapPost("/applications", async (CreateApplicationRequest request, ApplicationService service, CancellationToken ct) =>
 {
