@@ -6,7 +6,7 @@ public sealed class ApplicationService(IApplicationRepository repository)
 {
     public async Task<Guid> CreateAsync(string applicantReference, CancellationToken cancellationToken)
     {
-        var application = Application.Create(applicantReference);
+        var application = Misha.Domain.Applications.Application.Create(applicantReference);
         await repository.AddAsync(application, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
         return application.Id;
