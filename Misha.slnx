@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/Misha.Domain/Misha.Domain.csproj" />
+  <Project Path="src/Misha.Application/Misha.Application.csproj" />
+  <Project Path="src/Misha.Infrastructure/Misha.Infrastructure.csproj" />
+  <Project Path="src/Misha.Api/Misha.Api.csproj" />
+  <Project Path="src/Misha.Worker/Misha.Worker.csproj" />
+  <Project Path="tests/Misha.Domain.Tests/Misha.Domain.Tests.csproj" />
+</Solution>
