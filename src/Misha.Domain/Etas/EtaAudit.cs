@@ -46,8 +46,6 @@ public sealed class EtaAudit
             throw new ArgumentException("Audit outcome is required.", nameof(outcome));
         if (string.IsNullOrWhiteSpace(actorReference))
             throw new ArgumentException("Audit actor reference is required.", nameof(actorReference));
-        if (etaId is null && applicationId is null && string.IsNullOrWhiteSpace(etaNumber))
-            throw new ArgumentException("An ETA or ETA number reference is required.", nameof(etaNumber));
 
         return new EtaAudit(
             Guid.NewGuid(),
