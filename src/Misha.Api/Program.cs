@@ -2,6 +2,7 @@ using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Misha.Api;
 using Misha.Application.Applications;
 using Misha.Application.Documents;
 using Misha.Application.Policy;
@@ -39,6 +40,7 @@ builder.Services.AddScoped<WatchlistService>();
 builder.Services.AddSingleton<IPolicyEngine, DefaultPolicyEngine>();
 builder.Services.AddScoped<PolicyService>();
 Misha.Api.DecisionServiceRegistration.AddDecisionEngine(builder.Services);
+PaymentServiceRegistration.AddPaymentServices(builder.Services);
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
 builder.Services
@@ -58,6 +60,7 @@ app.UseAuthorization();
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
+app.MapPaymentEndpoints();
 
 app.MapPost("/applications", async (CreateApplicationRequest request, ApplicationService service, CancellationToken ct) =>
 {
