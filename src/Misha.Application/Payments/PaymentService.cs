@@ -40,7 +40,7 @@ public sealed class PaymentService(
                     payment.MarkPaid(provider.Name, result.ProviderReference);
                     break;
                 case PaymentStatus.RequiresAction:
-                    payment.MarkRequiresAction(provider.Name, result.ProviderReference);
+                    payment.MarkRequiresAction(provider.Name, result.ProviderReference, result.ActionUrl);
                     break;
                 case PaymentStatus.Failed:
                     payment.MarkFailed(result.ErrorMessage ?? "Payment provider returned a failed status.");
