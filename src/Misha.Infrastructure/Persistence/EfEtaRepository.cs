@@ -9,6 +9,9 @@ public sealed class EfEtaRepository(MishaDbContext db) : IEtaRepository
     public Task<Eta?> GetByApplicationIdAsync(Guid applicationId, CancellationToken cancellationToken) =>
         db.Etas.FirstOrDefaultAsync(x => x.ApplicationId == applicationId, cancellationToken);
 
+    public Task<Eta?> GetByVerificationTokenHashAsync(string verificationTokenHash, CancellationToken cancellationToken) =>
+        db.Etas.FirstOrDefaultAsync(x => x.VerificationTokenHash == verificationTokenHash, cancellationToken);
+
     public Task AddAsync(Eta eta, CancellationToken cancellationToken)
     {
         db.Etas.Add(eta);

@@ -40,6 +40,62 @@ public sealed class EtaService(
 
     public Task<Eta?> GetAsync(Guid applicationId, CancellationToken cancellationToken) =>
         etas.GetByApplicationIdAsync(applicationId, cancellationToken);
+
+    public async Task<EtaVerificationResult?> VerifyAsync(
+        string etaNumber,
+        string verificationToken,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(etaNumber) || string.IsNullOrWhiteSpace(verificationToken))
+            return null;
+
+        var hash = Eta.HashVerificationToken(verificationToken);
+        var eta = await etas.GetByVerificationTokenHashAsync(hash, cancellationToken);
+
+        if (eta is null || !string.Equals(eta.EtaNumber, etaNumber.Trim(), StringComparison.Ordinal))
+            return null;
+
+        var now = DateTimeOffset.UtcNow;
+        var status = eta.Status switch
+        {
+            EtaStatus.Revoked => EtaVerificationStatus.Revoked,
+            _ when now >= eta.ExpiresAtUtc => EtaVerificationStatus.Expired,
+            _ => EtaVerificationStatus.Valid
+        };
+
+        return new EtaVerificationResult(
+            eta.EtaNumber,
+            status,
+            eta.IssuedAtUtc,
+            eta.ExpiresAtUtc,
+            eta.RevokedAtUtc);
+    }
+
+    public async Task RevokeAsync(
+        Guid applicationId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var eta = await etas.GetByApplicationIdAsync(applicationId, cancellationToken)
+            ?? throw new KeyNotFoundException($"ETA for application '{applicationId}' was not found.");
+
+        eta.Revoke(reason);
+        await etas.SaveChangesAsync(cancellationToken);
+    }
 }
 
 public sealed record EtaIssueResult(Eta Eta, string? VerificationToken, bool Created);
+
+public enum EtaVerificationStatus
+{
+    Valid,
+    Expired,
+    Revoked
+}
+
+public sealed record EtaVerificationResult(
+    string EtaNumber,
+    EtaVerificationStatus Status,
+    DateTimeOffset IssuedAtUtc,
+    DateTimeOffset ExpiresAtUtc,
+    DateTimeOffset? RevokedAtUtc);
