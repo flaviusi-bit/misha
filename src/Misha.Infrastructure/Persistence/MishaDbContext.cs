@@ -81,6 +81,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         payment.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         payment.Property(x => x.Provider).HasMaxLength(100);
         payment.Property(x => x.ProviderReference).HasMaxLength(200);
+        payment.Property(x => x.ActionUrl).HasMaxLength(1000);
         payment.Property(x => x.FailureReason).HasMaxLength(1000);
         payment.Property(x => x.CreatedAtUtc).IsRequired();
         payment.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
