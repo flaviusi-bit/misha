@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting;
 using Misha.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
