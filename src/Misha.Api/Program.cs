@@ -1,14 +1,23 @@
+using Amazon.S3;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Applications;
 using Misha.Application.Documents;
 using Misha.Application.Watchlists;
+using Misha.Domain.Documents;
 using Misha.Infrastructure.Persistence;
+using Misha.Infrastructure.Storage;
 using Misha.Infrastructure.Watchlists;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<MishaDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Misha")));
+builder.Services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
+builder.Services.AddScoped<IDocumentStorage>(sp =>
+    new S3DocumentStorage(
+        sp.GetRequiredService<IAmazonS3>(),
+        builder.Configuration["DocumentStorage:BucketName"] ?? string.Empty));
 builder.Services.AddScoped<IApplicationRepository, EfApplicationRepository>();
 builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactRepository>();
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
@@ -71,16 +80,7 @@ app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService
 app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) =>
 {
     var documents = await service.GetAsync(id, ct);
-    return Results.Ok(documents.Select(x => new DocumentResponse(
-        x.Id,
-        x.ApplicationId,
-        x.DocumentType.ToString(),
-        x.FileName,
-        x.ContentType,
-        x.SizeBytes,
-        x.Sha256,
-        x.StorageKey,
-        x.CreatedAtUtc)));
+    return Results.Ok(documents.Select(ToDocumentResponse));
 });
 
 app.MapPost("/applications/{id:guid}/documents", async (
@@ -101,16 +101,7 @@ app.MapPost("/applications/{id:guid}/documents", async (
             request.StorageKey,
             ct);
 
-        return Results.Created($"/applications/{id}/documents", new DocumentResponse(
-            document.Id,
-            document.ApplicationId,
-            document.DocumentType.ToString(),
-            document.FileName,
-            document.ContentType,
-            document.SizeBytes,
-            document.Sha256,
-            document.StorageKey,
-            document.CreatedAtUtc));
+        return Results.Created($"/applications/{id}/documents", ToDocumentResponse(document));
     }
     catch (KeyNotFoundException ex)
     {
@@ -121,6 +112,38 @@ app.MapPost("/applications/{id:guid}/documents", async (
         return Results.BadRequest(new { error = ex.Message });
     }
 });
+
+app.MapPost("/applications/{id:guid}/documents/upload", async (
+    Guid id,
+    [FromForm] DocumentType documentType,
+    [FromForm] IFormFile file,
+    DocumentService service,
+    CancellationToken ct) =>
+{
+    try
+    {
+        if (file is null)
+            return Results.BadRequest(new { error = "A document file is required." });
+
+        var document = await service.UploadAsync(
+            id,
+            documentType,
+            file.FileName,
+            file.ContentType,
+            file.OpenReadStream(),
+            ct);
+
+        return Results.Created($"/applications/{id}/documents", ToDocumentResponse(document));
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+}).DisableAntiforgery();
 
 app.MapPost("/applications/{id:guid}/passport", async (
     Guid id,
@@ -193,6 +216,17 @@ app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService
 
 app.Run();
 
+static DocumentResponse ToDocumentResponse(DocumentArtifact document) => new(
+    document.Id,
+    document.ApplicationId,
+    document.DocumentType.ToString(),
+    document.FileName,
+    document.ContentType,
+    document.SizeBytes,
+    document.Sha256,
+    document.StorageKey,
+    document.CreatedAtUtc);
+
 static async Task<IResult> ExecuteCommand(Func<Task> command)
 {
     try
@@ -229,7 +263,7 @@ public sealed record ApplicationResponse(
     string? RefusalReason);
 
 public sealed record DocumentRequest(
-    Misha.Domain.Documents.DocumentType DocumentType,
+    DocumentType DocumentType,
     string FileName,
     string ContentType,
     long SizeBytes,
