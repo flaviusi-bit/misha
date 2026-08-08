@@ -21,10 +21,12 @@ public sealed class EcdsaEtaCredentialSigner : IEtaCredentialSigner, IDisposable
         _ecdsa.ImportFromPem(privateKeyPem);
     }
 
+    public bool IsEnabled => true;
     public string KeyId { get; }
     public string Algorithm => "ES256";
+    public string PublicKeyPem => _ecdsa.ExportSubjectPublicKeyInfoPem();
 
-    public string Sign(string etaNumber, DateTimeOffset issuedAtUtc, DateTimeOffset expiresAtUtc)
+    public string? Sign(string etaNumber, DateTimeOffset issuedAtUtc, DateTimeOffset expiresAtUtc)
     {
         var payload = EtaCredentialPayload.Canonicalize(etaNumber, issuedAtUtc, expiresAtUtc);
         var signature = _ecdsa.SignData(
@@ -35,6 +37,16 @@ public sealed class EcdsaEtaCredentialSigner : IEtaCredentialSigner, IDisposable
     }
 
     public void Dispose() => _ecdsa.Dispose();
+}
+
+public sealed class DisabledEtaCredentialSigner : IEtaCredentialSigner
+{
+    public bool IsEnabled => false;
+    public string KeyId => string.Empty;
+    public string Algorithm => "ES256";
+    public string? PublicKeyPem => null;
+
+    public string? Sign(string etaNumber, DateTimeOffset issuedAtUtc, DateTimeOffset expiresAtUtc) => null;
 }
 
 internal static class Base64UrlExtensions
