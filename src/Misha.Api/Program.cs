@@ -1,13 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Applications;
+using Misha.Application.Documents;
+using Misha.Application.Watchlists;
 using Misha.Infrastructure.Persistence;
+using Misha.Infrastructure.Watchlists;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<MishaDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Misha")));
 builder.Services.AddScoped<IApplicationRepository, EfApplicationRepository>();
+builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
+builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
+builder.Services.AddScoped<IWatchlistProvider, UnavailableWatchlistProvider>();
 builder.Services.AddScoped<ApplicationService>();
+builder.Services.AddScoped<PassportService>();
+builder.Services.AddScoped<WatchlistService>();
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
 var app = builder.Build();
@@ -58,6 +66,75 @@ app.MapPost("/applications/{id:guid}/refuse", async (
 app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) =>
     await ExecuteCommand(() => service.CancelAsync(id, ct)));
 
+app.MapPost("/applications/{id:guid}/passport", async (
+    Guid id,
+    PassportRequest request,
+    PassportService service,
+    CancellationToken ct) =>
+{
+    await service.CreateAsync(
+        id,
+        request.DocumentNumber,
+        request.IssuingCountry,
+        request.Surname,
+        request.GivenNames,
+        request.DateOfBirth,
+        request.Nationality,
+        request.ExpiryDate,
+        ct);
+
+    return Results.NoContent();
+});
+
+app.MapGet("/applications/{id:guid}/passport", async (Guid id, PassportService service, CancellationToken ct) =>
+{
+    var passport = await service.GetAsync(id, ct);
+    return passport is null
+        ? Results.NotFound()
+        : Results.Ok(new PassportResponse(
+            passport.Id,
+            passport.ApplicationId,
+            passport.DocumentNumber,
+            passport.IssuingCountry,
+            passport.Surname,
+            passport.GivenNames,
+            passport.DateOfBirth,
+            passport.Nationality,
+            passport.ExpiryDate,
+            passport.IsExpired(DateOnly.FromDateTime(DateTime.UtcNow))));
+});
+
+app.MapPost("/applications/{id:guid}/watchlist/screen", async (
+    Guid id,
+    WatchlistService service,
+    CancellationToken ct) =>
+{
+    var check = await service.ScreenAsync(id, ct);
+    return Results.Ok(new WatchlistResponse(
+        check.Id,
+        check.ApplicationId,
+        check.Provider,
+        check.Decision.ToString(),
+        check.MatchReference,
+        check.ErrorMessage,
+        check.CheckedAtUtc));
+});
+
+app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService service, CancellationToken ct) =>
+{
+    var check = await service.GetLatestAsync(id, ct);
+    return check is null
+        ? Results.NotFound()
+        : Results.Ok(new WatchlistResponse(
+            check.Id,
+            check.ApplicationId,
+            check.Provider,
+            check.Decision.ToString(),
+            check.MatchReference,
+            check.ErrorMessage,
+            check.CheckedAtUtc));
+});
+
 app.Run();
 
 static async Task<IResult> ExecuteCommand(Func<Task> command)
@@ -94,3 +171,33 @@ public sealed record ApplicationResponse(
     DateTimeOffset? DecidedAtUtc,
     DateTimeOffset? CancelledAtUtc,
     string? RefusalReason);
+
+public sealed record PassportRequest(
+    string DocumentNumber,
+    string IssuingCountry,
+    string Surname,
+    string GivenNames,
+    DateOnly DateOfBirth,
+    string Nationality,
+    DateOnly ExpiryDate);
+
+public sealed record PassportResponse(
+    Guid Id,
+    Guid ApplicationId,
+    string DocumentNumber,
+    string IssuingCountry,
+    string Surname,
+    string GivenNames,
+    DateOnly DateOfBirth,
+    string Nationality,
+    DateOnly ExpiryDate,
+    bool IsExpired);
+
+public sealed record WatchlistResponse(
+    Guid Id,
+    Guid ApplicationId,
+    string Provider,
+    string Decision,
+    string? MatchReference,
+    string? ErrorMessage,
+    DateTimeOffset? CheckedAtUtc);
