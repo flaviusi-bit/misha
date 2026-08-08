@@ -17,6 +17,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
     public DbSet<WatchlistCheck> WatchlistChecks => Set<WatchlistCheck>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Eta> Etas => Set<Eta>();
+    public DbSet<EtaAudit> EtaAudits => Set<EtaAudit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -101,5 +102,17 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         eta.HasIndex(x => x.ApplicationId).IsUnique();
         eta.HasIndex(x => x.EtaNumber).IsUnique();
         eta.HasIndex(x => x.VerificationTokenHash).IsUnique();
+
+        var etaAudit = modelBuilder.Entity<EtaAudit>();
+        etaAudit.ToTable("eta_audits");
+        etaAudit.HasKey(x => x.Id);
+        etaAudit.Property(x => x.EtaNumber).HasMaxLength(32);
+        etaAudit.Property(x => x.EventType).HasConversion<string>().HasMaxLength(32).IsRequired();
+        etaAudit.Property(x => x.Outcome).HasMaxLength(32).IsRequired();
+        etaAudit.Property(x => x.ActorReference).HasMaxLength(200).IsRequired();
+        etaAudit.Property(x => x.OccurredAtUtc).IsRequired();
+        etaAudit.HasIndex(x => new { x.EtaId, x.OccurredAtUtc });
+        etaAudit.HasIndex(x => new { x.ApplicationId, x.OccurredAtUtc });
+        etaAudit.HasIndex(x => new { x.EventType, x.OccurredAtUtc });
     }
 }

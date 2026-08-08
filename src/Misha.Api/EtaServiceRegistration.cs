@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Misha.Application.Etas;
 using Misha.Infrastructure.Persistence;
 
@@ -8,11 +9,13 @@ public static class EtaServiceRegistration
     public static void AddEtaServices(IServiceCollection services, IConfiguration? configuration = null)
     {
         services.AddScoped<IEtaRepository, EfEtaRepository>();
+        services.AddScoped<IEtaAuditRepository, EfEtaAuditRepository>();
         var validityDays = configuration?.GetValue<int?>("Eta:ValidityDays") ?? 90;
         services.AddScoped<EtaService>(sp => new EtaService(
             sp.GetRequiredService<Misha.Application.Applications.IApplicationRepository>(),
             sp.GetRequiredService<Misha.Application.Payments.IPaymentRepository>(),
             sp.GetRequiredService<IEtaRepository>(),
+            sp.GetRequiredService<IEtaAuditRepository>(),
             validityDays));
     }
 
@@ -55,12 +58,17 @@ public static class EtaServiceRegistration
         app.MapPost("/applications/{id:guid}/eta/revoke", async (
             Guid id,
             EtaRevocationRequest request,
+            ClaimsPrincipal user,
             EtaService service,
             CancellationToken ct) =>
         {
             try
             {
-                await service.RevokeAsync(id, request.Reason, ct);
+                var actorReference = user.FindFirstValue(ClaimTypes.NameIdentifier)
+                    ?? user.FindFirstValue("sub")
+                    ?? "authenticated-user";
+
+                await service.RevokeAsync(id, request.Reason, actorReference, ct);
                 return Results.NoContent();
             }
             catch (KeyNotFoundException ex)

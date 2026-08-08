@@ -10,6 +10,7 @@ public sealed class EtaService(
     IApplicationRepository applications,
     IPaymentRepository payments,
     IEtaRepository etas,
+    IEtaAuditRepository audits,
     int validityDays)
 {
     public async Task<EtaIssueResult> IssueAsync(
@@ -33,6 +34,16 @@ public sealed class EtaService(
         var (eta, verificationToken) = Eta.Issue(applicationId, validityDays);
 
         await etas.AddAsync(eta, cancellationToken);
+        await audits.AddAsync(
+            EtaAudit.Create(
+                EtaAuditEventType.Issued,
+                "Success",
+                "system",
+                eta.Id,
+                applicationId,
+                eta.EtaNumber,
+                eta.IssuedAtUtc),
+            cancellationToken);
         await etas.SaveChangesAsync(cancellationToken);
 
         return new EtaIssueResult(eta, verificationToken, true);
@@ -46,14 +57,36 @@ public sealed class EtaService(
         string verificationToken,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(etaNumber) || string.IsNullOrWhiteSpace(verificationToken))
+        var normalizedEtaNumber = etaNumber?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(normalizedEtaNumber) || string.IsNullOrWhiteSpace(verificationToken))
+        {
+            await audits.AddAsync(
+                EtaAudit.Create(
+                    EtaAuditEventType.VerificationFailed,
+                    "NotFound",
+                    "public-verification",
+                    etaNumber: normalizedEtaNumber),
+                cancellationToken);
+            await etas.SaveChangesAsync(cancellationToken);
             return null;
+        }
 
         var hash = Eta.HashVerificationToken(verificationToken);
         var eta = await etas.GetByVerificationTokenHashAsync(hash, cancellationToken);
 
-        if (eta is null || !string.Equals(eta.EtaNumber, etaNumber.Trim(), StringComparison.Ordinal))
+        if (eta is null || !string.Equals(eta.EtaNumber, normalizedEtaNumber, StringComparison.Ordinal))
+        {
+            await audits.AddAsync(
+                EtaAudit.Create(
+                    EtaAuditEventType.VerificationFailed,
+                    "NotFound",
+                    "public-verification",
+                    etaNumber: normalizedEtaNumber),
+                cancellationToken);
+            await etas.SaveChangesAsync(cancellationToken);
             return null;
+        }
 
         var now = DateTimeOffset.UtcNow;
         var status = eta.Status switch
@@ -62,6 +95,18 @@ public sealed class EtaService(
             _ when now >= eta.ExpiresAtUtc => EtaVerificationStatus.Expired,
             _ => EtaVerificationStatus.Valid
         };
+
+        await audits.AddAsync(
+            EtaAudit.Create(
+                EtaAuditEventType.Verified,
+                status.ToString(),
+                "public-verification",
+                eta.Id,
+                eta.ApplicationId,
+                eta.EtaNumber,
+                now),
+            cancellationToken);
+        await etas.SaveChangesAsync(cancellationToken);
 
         return new EtaVerificationResult(
             eta.EtaNumber,
@@ -74,12 +119,23 @@ public sealed class EtaService(
     public async Task RevokeAsync(
         Guid applicationId,
         string reason,
+        string actorReference,
         CancellationToken cancellationToken)
     {
         var eta = await etas.GetByApplicationIdAsync(applicationId, cancellationToken)
             ?? throw new KeyNotFoundException($"ETA for application '{applicationId}' was not found.");
 
         eta.Revoke(reason);
+        await audits.AddAsync(
+            EtaAudit.Create(
+                EtaAuditEventType.Revoked,
+                "Success",
+                actorReference,
+                eta.Id,
+                applicationId,
+                eta.EtaNumber,
+                eta.RevokedAtUtc),
+            cancellationToken);
         await etas.SaveChangesAsync(cancellationToken);
     }
 }

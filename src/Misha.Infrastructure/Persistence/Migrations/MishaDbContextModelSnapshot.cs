@@ -136,6 +136,23 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("VerificationTokenHash").IsUnique();
             b.ToTable("etas");
         });
+
+        modelBuilder.Entity("Misha.Domain.Etas.EtaAudit", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<Guid?>("EtaId").HasColumnType("uuid");
+            b.Property<Guid?>("ApplicationId").HasColumnType("uuid");
+            b.Property<string>("EtaNumber").HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("EventType").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("Outcome").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("ActorReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone");
+            b.HasKey("Id");
+            b.HasIndex("EtaId", "OccurredAtUtc");
+            b.HasIndex("ApplicationId", "OccurredAtUtc");
+            b.HasIndex("EventType", "OccurredAtUtc");
+            b.ToTable("eta_audits");
+        });
 #pragma warning restore 612, 618
     }
 }
