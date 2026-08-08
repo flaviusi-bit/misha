@@ -35,6 +35,21 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.ToTable("applications");
         });
 
+        modelBuilder.Entity("Misha.Domain.Decisions.DecisionAudit", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<Guid>("ApplicationId").HasColumnType("uuid");
+            b.Property<string>("PolicyVersion").IsRequired().HasMaxLength(50).HasColumnType("character varying(50)");
+            b.Property<string>("PolicyDecision").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("Decision").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("ReasonsJson").IsRequired().HasColumnType("jsonb");
+            b.Property<string>("ActorReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+            b.HasKey("Id");
+            b.HasIndex("ApplicationId", "CreatedAtUtc");
+            b.ToTable("decision_audits");
+        });
+
         modelBuilder.Entity("Misha.Domain.Documents.DocumentArtifact", b =>
         {
             b.Property<Guid>("Id").HasColumnType("uuid");
@@ -102,6 +117,24 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("ApplicationId", "CreatedAtUtc");
             b.HasIndex("ProviderReference");
             b.ToTable("payments");
+        });
+
+        modelBuilder.Entity("Misha.Domain.Etas.Eta", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<Guid>("ApplicationId").HasColumnType("uuid");
+            b.Property<string>("EtaNumber").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("VerificationTokenHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
+            b.Property<int>("Status").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<DateTimeOffset>("IssuedAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<DateTimeOffset>("ExpiresAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<DateTimeOffset?>("RevokedAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<string>("RevocationReason").HasMaxLength(1000).HasColumnType("character varying(1000)");
+            b.HasKey("Id");
+            b.HasIndex("ApplicationId").IsUnique();
+            b.HasIndex("EtaNumber").IsUnique();
+            b.HasIndex("VerificationTokenHash").IsUnique();
+            b.ToTable("etas");
         });
 #pragma warning restore 612, 618
     }
