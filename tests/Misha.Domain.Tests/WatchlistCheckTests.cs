@@ -1,4 +1,5 @@
 using Misha.Domain.Watchlists;
+using Xunit;
 
 namespace Misha.Domain.Tests;
 
