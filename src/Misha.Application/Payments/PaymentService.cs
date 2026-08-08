@@ -18,8 +18,11 @@ public sealed class PaymentService(
         var application = await applications.GetAsync(applicationId, cancellationToken)
             ?? throw new KeyNotFoundException($"Application '{applicationId}' was not found.");
 
-        if (application.Status != ApplicationStatus.Approved)
-            throw new InvalidOperationException("Payment can only be initiated for an approved application.");
+        // ETA fees are normally collected before the final eligibility decision.
+        // Payment therefore belongs after submission and before approval/refusal.
+        if (application.Status is not (ApplicationStatus.Submitted or ApplicationStatus.Processing))
+            throw new InvalidOperationException(
+                "Payment can only be initiated for a submitted or processing application.");
 
         var existing = await payments.GetLatestAsync(applicationId, cancellationToken);
         if (existing is not null && existing.Status is PaymentStatus.Pending or PaymentStatus.RequiresAction)
