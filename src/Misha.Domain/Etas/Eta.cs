@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Misha.Domain.Etas;
 
@@ -51,12 +52,20 @@ public sealed class Eta
             .Replace("/", "_", StringComparison.Ordinal)
             .TrimEnd('=');
 
-        var hash = Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(verificationToken)));
+        var hash = HashVerificationToken(verificationToken);
         var etaNumber = $"ETA-{Convert.ToHexString(RandomNumberGenerator.GetBytes(6))}";
 
         return (
             new Eta(Guid.NewGuid(), applicationId, etaNumber, hash, issuedAt, expiresAt),
             verificationToken);
+    }
+
+    public static string HashVerificationToken(string verificationToken)
+    {
+        if (string.IsNullOrWhiteSpace(verificationToken))
+            throw new ArgumentException("Verification token is required.", nameof(verificationToken));
+
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(verificationToken.Trim())));
     }
 
     public bool IsValidAt(DateTimeOffset now) =>
@@ -67,7 +76,7 @@ public sealed class Eta
         if (string.IsNullOrWhiteSpace(verificationToken))
             return false;
 
-        var suppliedHash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(verificationToken.Trim()));
+        var suppliedHash = SHA256.HashData(Encoding.UTF8.GetBytes(verificationToken.Trim()));
         var storedHash = Convert.FromHexString(VerificationTokenHash);
         return CryptographicOperations.FixedTimeEquals(suppliedHash, storedHash);
     }
