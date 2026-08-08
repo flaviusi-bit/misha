@@ -3,6 +3,7 @@ using MishaApplication = Misha.Domain.Applications.Application;
 using Misha.Domain.Decisions;
 using Misha.Domain.Documents;
 using Misha.Domain.Etas;
+using Misha.Domain.ManualReviews;
 using Misha.Domain.Payments;
 using Misha.Domain.Watchlists;
 
@@ -18,6 +19,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Eta> Etas => Set<Eta>();
     public DbSet<EtaAudit> EtaAudits => Set<EtaAudit>();
+    public DbSet<ManualReviewCase> ManualReviewCases => Set<ManualReviewCase>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -114,5 +116,19 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         etaAudit.HasIndex(x => new { x.EtaId, x.OccurredAtUtc });
         etaAudit.HasIndex(x => new { x.ApplicationId, x.OccurredAtUtc });
         etaAudit.HasIndex(x => new { x.EventType, x.OccurredAtUtc });
+
+        var manualReview = modelBuilder.Entity<ManualReviewCase>();
+        manualReview.ToTable("manual_review_cases");
+        manualReview.HasKey(x => x.Id);
+        manualReview.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+        manualReview.Property(x => x.Trigger).HasMaxLength(100).IsRequired();
+        manualReview.Property(x => x.Reason).HasMaxLength(2000).IsRequired();
+        manualReview.Property(x => x.AssignedToActorReference).HasMaxLength(200);
+        manualReview.Property(x => x.Resolution).HasConversion<string>().HasMaxLength(32);
+        manualReview.Property(x => x.ResolutionReason).HasMaxLength(2000);
+        manualReview.Property(x => x.ResolvedByActorReference).HasMaxLength(200);
+        manualReview.Property(x => x.CreatedAtUtc).IsRequired();
+        manualReview.HasIndex(x => new { x.Status, x.CreatedAtUtc });
+        manualReview.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
     }
 }
