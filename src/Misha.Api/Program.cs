@@ -10,10 +10,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<MishaDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Misha")));
 builder.Services.AddScoped<IApplicationRepository, EfApplicationRepository>();
+builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactRepository>();
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
 builder.Services.AddScoped<IWatchlistProvider, UnavailableWatchlistProvider>();
 builder.Services.AddScoped<ApplicationService>();
+builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<PassportService>();
 builder.Services.AddScoped<WatchlistService>();
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
@@ -65,6 +67,60 @@ app.MapPost("/applications/{id:guid}/refuse", async (
 
 app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) =>
     await ExecuteCommand(() => service.CancelAsync(id, ct)));
+
+app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) =>
+{
+    var documents = await service.GetAsync(id, ct);
+    return Results.Ok(documents.Select(x => new DocumentResponse(
+        x.Id,
+        x.ApplicationId,
+        x.DocumentType.ToString(),
+        x.FileName,
+        x.ContentType,
+        x.SizeBytes,
+        x.Sha256,
+        x.StorageKey,
+        x.CreatedAtUtc)));
+});
+
+app.MapPost("/applications/{id:guid}/documents", async (
+    Guid id,
+    DocumentRequest request,
+    DocumentService service,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var document = await service.RegisterAsync(
+            id,
+            request.DocumentType,
+            request.FileName,
+            request.ContentType,
+            request.SizeBytes,
+            request.Sha256,
+            request.StorageKey,
+            ct);
+
+        return Results.Created($"/applications/{id}/documents", new DocumentResponse(
+            document.Id,
+            document.ApplicationId,
+            document.DocumentType.ToString(),
+            document.FileName,
+            document.ContentType,
+            document.SizeBytes,
+            document.Sha256,
+            document.StorageKey,
+            document.CreatedAtUtc));
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
 
 app.MapPost("/applications/{id:guid}/passport", async (
     Guid id,
@@ -171,6 +227,25 @@ public sealed record ApplicationResponse(
     DateTimeOffset? DecidedAtUtc,
     DateTimeOffset? CancelledAtUtc,
     string? RefusalReason);
+
+public sealed record DocumentRequest(
+    Misha.Domain.Documents.DocumentType DocumentType,
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    string Sha256,
+    string StorageKey);
+
+public sealed record DocumentResponse(
+    Guid Id,
+    Guid ApplicationId,
+    string DocumentType,
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    string Sha256,
+    string StorageKey,
+    DateTimeOffset CreatedAtUtc);
 
 public sealed record PassportRequest(
     string DocumentNumber,
