@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MishaApplication = Misha.Domain.Applications.Application;
 using Misha.Domain.Decisions;
 using Misha.Domain.Documents;
+using Misha.Domain.Payments;
 using Misha.Domain.Watchlists;
 
 namespace Misha.Infrastructure.Persistence;
@@ -13,6 +14,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
     public DbSet<DocumentArtifact> DocumentArtifacts => Set<DocumentArtifact>();
     public DbSet<PassportDocument> PassportDocuments => Set<PassportDocument>();
     public DbSet<WatchlistCheck> WatchlistChecks => Set<WatchlistCheck>();
+    public DbSet<Payment> Payments => Set<Payment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -70,5 +72,18 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         watchlist.Property(x => x.MatchReference).HasMaxLength(200);
         watchlist.Property(x => x.ErrorMessage).HasMaxLength(1000);
         watchlist.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
+
+        var payment = modelBuilder.Entity<Payment>();
+        payment.ToTable("payments");
+        payment.HasKey(x => x.Id);
+        payment.Property(x => x.AmountMinor).IsRequired();
+        payment.Property(x => x.Currency).HasMaxLength(3).IsRequired();
+        payment.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+        payment.Property(x => x.Provider).HasMaxLength(100);
+        payment.Property(x => x.ProviderReference).HasMaxLength(200);
+        payment.Property(x => x.FailureReason).HasMaxLength(1000);
+        payment.Property(x => x.CreatedAtUtc).IsRequired();
+        payment.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
+        payment.HasIndex(x => x.ProviderReference);
     }
 }
