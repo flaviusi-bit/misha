@@ -2,10 +2,12 @@ namespace Misha.Application.Etas;
 
 public interface IEtaCredentialSigner
 {
+    bool IsEnabled { get; }
     string KeyId { get; }
     string Algorithm { get; }
+    string? PublicKeyPem { get; }
 
-    string Sign(string etaNumber, DateTimeOffset issuedAtUtc, DateTimeOffset expiresAtUtc);
+    string? Sign(string etaNumber, DateTimeOffset issuedAtUtc, DateTimeOffset expiresAtUtc);
 }
 
 public static class EtaCredentialPayload
