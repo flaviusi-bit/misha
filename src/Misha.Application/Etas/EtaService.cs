@@ -10,7 +10,7 @@ public sealed class EtaService(
     IApplicationRepository applications,
     IPaymentRepository payments,
     IEtaRepository etas,
-    IConfiguration configuration)
+    int validityDays)
 {
     public async Task<EtaIssueResult> IssueAsync(
         Guid applicationId,
@@ -30,7 +30,6 @@ public sealed class EtaService(
         if (existing is not null)
             return new EtaIssueResult(existing, null, false);
 
-        var validityDays = configuration.GetValue<int?>("Eta:ValidityDays") ?? 90;
         var (eta, verificationToken) = Eta.Issue(applicationId, validityDays);
 
         await etas.AddAsync(eta, cancellationToken);
