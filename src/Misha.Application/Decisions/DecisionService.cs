@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Misha.Application.Applications;
+using Misha.Application.ManualReviews;
 using Misha.Application.Policy;
 using Misha.Domain.Decisions;
+using Misha.Domain.ManualReviews;
 
 namespace Misha.Application.Decisions;
 
@@ -9,7 +11,8 @@ public sealed class DecisionService(
     IApplicationRepository applications,
     PolicyService policyService,
     IDecisionEngine decisionEngine,
-    IDecisionAuditRepository audits)
+    IDecisionAuditRepository audits,
+    IManualReviewRepository manualReviews)
 {
     public const string PolicyVersion = "1.0";
 
@@ -33,6 +36,20 @@ public sealed class DecisionService(
                 application.Refuse(BuildRefusalReason(result.Reasons));
                 break;
             case DecisionOutcome.ManualReview:
+            {
+                var existingReview = await manualReviews.GetOpenForApplicationAsync(applicationId, cancellationToken);
+                if (existingReview is null)
+                {
+                    var reason = BuildReviewReason(result.Reasons);
+                    var reviewCase = ManualReviewCase.Create(
+                        applicationId,
+                        "Decision.ManualReview",
+                        reason);
+                    await manualReviews.AddAsync(reviewCase, cancellationToken);
+                }
+
+                break;
+            }
             case DecisionOutcome.NotReady:
                 break;
             default:
@@ -57,6 +74,14 @@ public sealed class DecisionService(
     {
         if (reasons.Count == 0)
             return "Application is not eligible under the active policy.";
+
+        return string.Join(" ", reasons);
+    }
+
+    private static string BuildReviewReason(IReadOnlyList<string> reasons)
+    {
+        if (reasons.Count == 0)
+            return "The active policy requires human review.";
 
         return string.Join(" ", reasons);
     }
