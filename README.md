@@ -4,13 +4,13 @@ MISHA is the working repository for the ETA / border-management platform.
 
 ## Engineering baseline
 
-The architecture and delivery baseline defined during the initial design phase is now stored in this repository under `docs/`.
+The architecture and delivery baseline defined during the initial design phase is stored in this repository under `docs/`.
 
 ### Technology decisions
 
 - **Cloud:** AWS
 - **Database:** PostgreSQL
-- **Backend:** .NET / C#
+- **Backend:** .NET 10 / C#
 - **Compute:** ECS Fargate
 - **Messaging:** Amazon SQS
 - **Object storage:** Amazon S3
@@ -24,17 +24,18 @@ The architecture and delivery baseline defined during the initial design phase i
 Misha/
 ├── docs/
 │   ├── architecture/
-│   │   └── aws-architecture.md
 │   ├── security/
-│   │   └── security-architecture.md
 │   ├── observability/
-│   │   └── observability.md
 │   ├── testing/
-│   │   └── test-strategy.md
 │   └── release/
-│       └── mvp-readiness.md
 ├── src/
+│   ├── Misha.Domain/
+│   ├── Misha.Application/
+│   ├── Misha.Infrastructure/
+│   ├── Misha.Api/
+│   └── Misha.Worker/
 ├── tests/
+│   └── Misha.Domain.Tests/
 ├── infra/
 │   └── terraform/
 └── .github/
@@ -73,8 +74,29 @@ Architecture documentation is not treated as implementation evidence.
 ## Current status
 
 **Architecture:** baseline established  
-**Implementation:** starting from repository bootstrap  
-**Production readiness:** not yet claimed
+**Repository bootstrap:** IMPLEMENTED  
+**Domain application slice:** IMPLEMENTED  
+**Automated tests:** CREATED; CI validation pending  
+**AWS deployment:** NOT IMPLEMENTED  
+**Production readiness:** NOT CLAIMED
+
+## Local development
+
+Start PostgreSQL:
+
+```bash
+docker compose up -d postgres
+```
+
+Provide the connection string through the environment rather than committing credentials.
+
+Build and test:
+
+```bash
+dotnet restore Misha.slnx
+dotnet build Misha.slnx
+dotnet test Misha.slnx
+```
 
 ## Documentation
 
