@@ -1,5 +1,6 @@
 using Misha.Domain.Applications;
 using Xunit;
+using DomainApplication = Misha.Domain.Applications.Application;
 
 namespace Misha.Domain.Tests;
 
@@ -8,7 +9,7 @@ public sealed class ApplicationTests
     [Fact]
     public void Create_starts_as_draft()
     {
-        var application = Application.Create("traveller-001");
+        var application = DomainApplication.Create("traveller-001");
 
         Assert.Equal(ApplicationStatus.Draft, application.Status);
         Assert.Equal("traveller-001", application.ApplicantReference);
@@ -17,7 +18,7 @@ public sealed class ApplicationTests
     [Fact]
     public void Submit_moves_draft_to_submitted()
     {
-        var application = Application.Create("traveller-001");
+        var application = DomainApplication.Create("traveller-001");
 
         application.Submit();
 
@@ -28,7 +29,7 @@ public sealed class ApplicationTests
     [Fact]
     public void Submit_cannot_be_called_twice()
     {
-        var application = Application.Create("traveller-001");
+        var application = DomainApplication.Create("traveller-001");
         application.Submit();
 
         Assert.Throws<InvalidOperationException>(() => application.Submit());
@@ -37,7 +38,7 @@ public sealed class ApplicationTests
     [Fact]
     public void Processing_moves_submitted_to_processing()
     {
-        var application = Application.Create("traveller-001");
+        var application = DomainApplication.Create("traveller-001");
         application.Submit();
 
         application.StartProcessing();
@@ -101,14 +102,14 @@ public sealed class ApplicationTests
     [Fact]
     public void Processing_cannot_start_before_submission()
     {
-        var application = Application.Create("traveller-001");
+        var application = DomainApplication.Create("traveller-001");
 
         Assert.Throws<InvalidOperationException>(() => application.StartProcessing());
     }
 
-    private static Application CreateProcessingApplication()
+    private static DomainApplication CreateProcessingApplication()
     {
-        var application = Application.Create("traveller-001");
+        var application = DomainApplication.Create("traveller-001");
         application.Submit();
         application.StartProcessing();
         return application;
