@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Misha.Application.Decisions;
 using Misha.Domain.Decisions;
 
@@ -9,5 +10,16 @@ public sealed class EfDecisionAuditRepository(MishaDbContext db) : IDecisionAudi
     {
         db.DecisionAudits.Add(audit);
         return Task.CompletedTask;
+    }
+
+    public async Task<IReadOnlyList<DecisionAudit>> GetByApplicationAsync(
+        Guid applicationId,
+        CancellationToken cancellationToken)
+    {
+        return await db.DecisionAudits
+            .AsNoTracking()
+            .Where(x => x.ApplicationId == applicationId)
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
     }
 }
