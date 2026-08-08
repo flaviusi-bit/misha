@@ -8,7 +8,8 @@ public static class EtaVerificationPage
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(nonce);
 
-        return $"""<!doctype html>
+        return $"""
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -63,7 +64,8 @@ public static class EtaVerificationPage
     }})();
   </script>
 </body>
-</html>""";
+</html>
+""";
     }
 
     public static string CreateNonce()
