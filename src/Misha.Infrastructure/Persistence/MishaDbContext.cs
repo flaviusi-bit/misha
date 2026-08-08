@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MishaApplication = Misha.Domain.Applications.Application;
+using Misha.Domain.Decisions;
 using Misha.Domain.Documents;
 using Misha.Domain.Watchlists;
 
@@ -8,6 +9,7 @@ namespace Misha.Infrastructure.Persistence;
 public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : DbContext(options)
 {
     public DbSet<MishaApplication> Applications => Set<MishaApplication>();
+    public DbSet<DecisionAudit> DecisionAudits => Set<DecisionAudit>();
     public DbSet<DocumentArtifact> DocumentArtifacts => Set<DocumentArtifact>();
     public DbSet<PassportDocument> PassportDocuments => Set<PassportDocument>();
     public DbSet<WatchlistCheck> WatchlistChecks => Set<WatchlistCheck>();
@@ -21,8 +23,20 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         application.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         application.Property(x => x.CreatedAtUtc).IsRequired();
         application.Property(x => x.RefusalReason).HasMaxLength(1000);
+        application.Property(x => x.Version).IsRowVersion();
         application.HasIndex(x => x.ApplicantReference);
         application.HasIndex(x => x.Status);
+
+        var audit = modelBuilder.Entity<DecisionAudit>();
+        audit.ToTable("decision_audits");
+        audit.HasKey(x => x.Id);
+        audit.Property(x => x.PolicyVersion).HasMaxLength(50).IsRequired();
+        audit.Property(x => x.PolicyDecision).HasMaxLength(32).IsRequired();
+        audit.Property(x => x.Decision).HasMaxLength(32).IsRequired();
+        audit.Property(x => x.ReasonsJson).HasColumnType("jsonb").IsRequired();
+        audit.Property(x => x.ActorReference).HasMaxLength(200).IsRequired();
+        audit.Property(x => x.CreatedAtUtc).IsRequired();
+        audit.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
 
         var document = modelBuilder.Entity<DocumentArtifact>();
         document.ToTable("document_artifacts");

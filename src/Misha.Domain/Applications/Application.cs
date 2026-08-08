@@ -22,6 +22,9 @@ public sealed class Application
     public DateTimeOffset? CancelledAtUtc { get; private set; }
     public string? RefusalReason { get; private set; }
 
+    // PostgreSQL maps this property to the implicit xmin column for optimistic concurrency.
+    public uint Version { get; private set; }
+
     public static Application Create(string applicantReference)
     {
         if (string.IsNullOrWhiteSpace(applicantReference))
