@@ -26,7 +26,11 @@ builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactReposi
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
 builder.Services.AddScoped<IWatchlistProvider, UnavailableWatchlistProvider>();
-builder.Services.AddScoped<IPassportVerificationProvider, UnavailablePassportVerificationProvider>();
+builder.Services.AddScoped<IPassportVerificationProvider, HttpPassportVerificationProvider>();
+builder.Services.AddHttpClient("passport-verification", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddScoped<ApplicationService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<PassportService>();
@@ -271,8 +275,6 @@ app.MapPost("/applications/{id:guid}/policy/evaluate", async (
         return Results.NotFound(new { error = ex.Message });
     }
 }).RequireAuthorization();
-
-Misha.Api.DecisionEndpoints.Map(app);
 
 app.Run();
 
