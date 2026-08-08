@@ -2,7 +2,7 @@
 
 ## Architecture status
 
-Architecture is sufficiently defined to begin implementation.
+Architecture is sufficiently defined to continue implementation.
 
 Architecture readiness does not mean production readiness.
 
@@ -40,6 +40,21 @@ Authentication
  → eTA
  → Verification
 ```
+
+## Current implementation status
+
+The repository currently has implemented slices for the critical path through eTA verification, plus payment reconciliation, cryptographic eTA trust, audit history, and the first manual-review queue implementation.
+
+Manual review now supports:
+
+- automatic queue creation when the decision engine returns `ManualReview`
+- one open case per application
+- authenticated queue inspection
+- reviewer assignment
+- explicit approve/refuse resolution with a mandatory reason
+- application/review persistence in one save operation
+
+The remaining production gates below are still open.
 
 ## External blockers
 
@@ -97,6 +112,7 @@ Documentation alone is not implementation evidence.
 11. Verification
 12. Manual review
 13. Fast Lane
-14. AWS and CI/CD
-15. Security and performance validation
-16. Production readiness
+14. Notifications
+15. AWS and CI/CD
+16. Security and performance validation
+17. Production readiness
