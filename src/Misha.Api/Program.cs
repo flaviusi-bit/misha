@@ -42,7 +42,7 @@ builder.Services.AddSingleton<IPolicyEngine, DefaultPolicyEngine>();
 builder.Services.AddScoped<PolicyService>();
 Misha.Api.DecisionServiceRegistration.AddDecisionEngine(builder.Services);
 PaymentServiceRegistration.AddPaymentServices(builder.Services);
-EtaServiceRegistration.AddEtaServices(builder.Services);
+EtaServiceRegistration.AddEtaServices(builder.Services, builder.Configuration);
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
 builder.Services
