@@ -33,7 +33,7 @@ public sealed class EcdsaEtaCredentialSigner : IEtaCredentialSigner, IDisposable
             Encoding.UTF8.GetBytes(payload),
             HashAlgorithmName.SHA256);
 
-        return Convert.ToBase64UrlString(signature);
+        return signature.ToBase64UrlString();
     }
 
     public void Dispose() => _ecdsa.Dispose();
