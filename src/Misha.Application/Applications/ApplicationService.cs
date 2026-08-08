@@ -1,6 +1,6 @@
-namespace Misha.Application.Applications;
-
 using Misha.Domain.Applications;
+
+namespace Misha.Application.Applications;
 
 public sealed class ApplicationService(IApplicationRepository repository)
 {
