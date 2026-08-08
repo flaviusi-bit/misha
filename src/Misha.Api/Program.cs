@@ -1,4 +1,5 @@
 using Amazon.S3;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Applications;
@@ -32,7 +33,20 @@ builder.Services.AddScoped<PassportVerificationService>();
 builder.Services.AddScoped<WatchlistService>();
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = builder.Configuration["Authentication:Authority"];
+        options.Audience = builder.Configuration["Authentication:Audience"];
+        options.RequireHttpsMetadata = true;
+    });
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
@@ -41,7 +55,7 @@ app.MapPost("/applications", async (CreateApplicationRequest request, Applicatio
 {
     var id = await service.CreateAsync(request.ApplicantReference, ct);
     return Results.Created($"/applications/{id}", new { id });
-});
+}).RequireAuthorization();
 
 app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service, CancellationToken ct) =>
 {
@@ -59,32 +73,32 @@ app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service
             application.DecidedAtUtc,
             application.CancelledAtUtc,
             application.RefusalReason));
-});
+}).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.SubmitAsync(id, ct)));
+    await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/process", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.StartProcessingAsync(id, ct)));
+    await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.ApproveAsync(id, ct)));
+    await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/refuse", async (
     Guid id,
     RefuseApplicationRequest request,
     ApplicationService service,
     CancellationToken ct) =>
-    await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct)));
+    await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.CancelAsync(id, ct)));
+    await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization();
 
 app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) =>
 {
     var documents = await service.GetAsync(id, ct);
     return Results.Ok(documents.Select(ToDocumentResponse));
-});
+}).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/documents", async (
     Guid id,
@@ -114,7 +128,7 @@ app.MapPost("/applications/{id:guid}/documents", async (
     {
         return Results.BadRequest(new { error = ex.Message });
     }
-});
+}).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/documents/upload", async (
     Guid id,
@@ -146,7 +160,7 @@ app.MapPost("/applications/{id:guid}/documents/upload", async (
     {
         return Results.BadRequest(new { error = ex.Message });
     }
-}).DisableAntiforgery();
+}).DisableAntiforgery().RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/passport", async (
     Guid id,
@@ -166,7 +180,7 @@ app.MapPost("/applications/{id:guid}/passport", async (
         ct);
 
     return Results.NoContent();
-});
+}).RequireAuthorization();
 
 app.MapGet("/applications/{id:guid}/passport", async (Guid id, PassportService service, CancellationToken ct) =>
 {
@@ -184,7 +198,7 @@ app.MapGet("/applications/{id:guid}/passport", async (Guid id, PassportService s
             passport.Nationality,
             passport.ExpiryDate,
             passport.IsExpired(DateOnly.FromDateTime(DateTime.UtcNow))));
-});
+}).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/passport/verify", async (
     Guid id,
@@ -203,7 +217,7 @@ app.MapPost("/applications/{id:guid}/passport/verify", async (
     {
         return Results.NotFound(new { error = ex.Message });
     }
-});
+}).RequireAuthorization();
 
 app.MapPost("/applications/{id:guid}/watchlist/screen", async (
     Guid id,
@@ -219,7 +233,7 @@ app.MapPost("/applications/{id:guid}/watchlist/screen", async (
         check.MatchReference,
         check.ErrorMessage,
         check.CheckedAtUtc));
-});
+}).RequireAuthorization();
 
 app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService service, CancellationToken ct) =>
 {
@@ -234,7 +248,7 @@ app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService
             check.MatchReference,
             check.ErrorMessage,
             check.CheckedAtUtc));
-});
+}).RequireAuthorization();
 
 app.Run();
 
