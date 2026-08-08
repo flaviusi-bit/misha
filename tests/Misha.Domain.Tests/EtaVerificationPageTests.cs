@@ -6,7 +6,7 @@ namespace Misha.Domain.Tests;
 public sealed class EtaVerificationPageTests
 {
     [Fact]
-    public void Verification_page_does_not_embed_the_verification_token()
+    public void Verification_page_reads_the_token_from_the_fragment_without_embedding_a_token_value()
     {
         const string nonce = "test-nonce";
 
@@ -15,7 +15,9 @@ public sealed class EtaVerificationPageTests
         Assert.Contains("eTA verification", html);
         Assert.Contains("nonce=\"test-nonce\"", html);
         Assert.Contains("location.hash", html);
-        Assert.DoesNotContain("verificationToken", html);
+        Assert.Contains("verificationToken: token", html);
+        Assert.DoesNotContain("__NONCE__", html);
+        Assert.DoesNotContain("?token=", html);
     }
 
     [Fact]
