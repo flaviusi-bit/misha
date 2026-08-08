@@ -74,10 +74,10 @@ public static class EtaServiceRegistration
 
     private static EtaResponse ToResponse(EtaIssueResult result, IConfiguration configuration)
     {
-        var publicBaseUrl = configuration["Eta:PublicBaseUrl"]?.TrimEnd('/');
-        var verificationUrl = string.IsNullOrWhiteSpace(publicBaseUrl)
-            ? null
-            : $"{publicBaseUrl}/eta/verify/{Uri.EscapeDataString(result.Eta.EtaNumber)}";
+        var verificationUrl = EtaVerificationUrl.Create(
+            configuration["Eta:PublicBaseUrl"],
+            result.Eta.EtaNumber,
+            result.VerificationToken ?? string.Empty);
 
         return new EtaResponse(
             result.Eta.Id,
