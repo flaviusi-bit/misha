@@ -9,7 +9,7 @@ public static class PaymentServiceRegistration
     public static void AddPaymentServices(IServiceCollection services)
     {
         services.AddScoped<IPaymentRepository, EfPaymentRepository>();
-        services.AddScoped<IPaymentProvider, UnavailablePaymentProvider>();
+        services.AddScoped<IPaymentProvider, HttpPaymentProvider>();
         services.AddScoped<PaymentService>();
     }
 
@@ -60,6 +60,7 @@ public static class PaymentServiceRegistration
         payment.Status.ToString(),
         payment.Provider,
         payment.ProviderReference,
+        payment.ActionUrl,
         payment.FailureReason,
         payment.CreatedAtUtc,
         payment.CompletedAtUtc);
@@ -75,6 +76,7 @@ public sealed record PaymentResponse(
     string Status,
     string? Provider,
     string? ProviderReference,
+    string? ActionUrl,
     string? FailureReason,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset? CompletedAtUtc);
