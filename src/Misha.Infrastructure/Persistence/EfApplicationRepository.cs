@@ -1,15 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Applications;
-using Misha.Domain.Applications;
+using DomainApplication = Misha.Domain.Applications.Application;
 
 namespace Misha.Infrastructure.Persistence;
 
 public sealed class EfApplicationRepository(MishaDbContext db) : IApplicationRepository
 {
-    public Task<Application?> GetAsync(Guid id, CancellationToken cancellationToken) =>
+    public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         db.Applications.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-    public Task AddAsync(Application application, CancellationToken cancellationToken)
+    public Task AddAsync(DomainApplication application, CancellationToken cancellationToken)
     {
         db.Applications.Add(application);
         return Task.CompletedTask;
