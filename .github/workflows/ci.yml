@@ -2,8 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/eta-qr-verification
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -29,4 +32,4 @@ jobs:
       - name: Test
         run: dotnet test Misha.slnx --configuration Release --no-build --verbosity normal
 
-# CI trigger verification: run on every main push.
+# CI trigger verification: run on every main/feature push and pull request.
