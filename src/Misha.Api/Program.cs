@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
@@ -45,6 +46,30 @@ PaymentServiceRegistration.AddPaymentServices(builder.Services);
 EtaServiceRegistration.AddEtaServices(builder.Services, builder.Configuration);
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Misha.Security.RateLimiting");
+        logger.LogWarning("eTA verification request rejected by rate limiter for {Path}", context.HttpContext.Request.Path);
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await ValueTask.CompletedTask;
+    };
+
+    options.AddPolicy("eta-verification", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+});
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -59,6 +84,7 @@ var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
