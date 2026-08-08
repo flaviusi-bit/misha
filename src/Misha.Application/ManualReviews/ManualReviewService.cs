@@ -46,7 +46,7 @@ public sealed class ManualReviewService(
                 throw new ArgumentOutOfRangeException(nameof(resolution));
         }
 
+        // Both aggregates are tracked by the same DbContext; persist them atomically in one save.
         await reviews.SaveChangesAsync(cancellationToken);
-        await applications.SaveChangesAsync(cancellationToken);
     }
 }
