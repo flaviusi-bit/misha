@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 using Misha.Application.Decisions;
 
 namespace Misha.Api;
@@ -31,6 +32,10 @@ public static class DecisionEndpoints
             catch (ArgumentException ex)
             {
                 return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Results.Conflict(new { error = "Application changed while the decision was being applied. Re-evaluate before deciding again." });
             }
             catch (InvalidOperationException ex)
             {
