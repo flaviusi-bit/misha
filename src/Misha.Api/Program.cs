@@ -90,6 +90,8 @@ app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
 app.MapPaymentEndpoints();
 app.MapEtaEndpoints();
+DecisionEndpoints.Map(app);
+ManualReviewEndpoints.Map(app);
 
 app.MapPost("/applications", async (CreateApplicationRequest request, ApplicationService service, CancellationToken ct) =>
 {
