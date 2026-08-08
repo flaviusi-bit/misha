@@ -1,4 +1,5 @@
 using Misha.Domain.Applications;
+using Xunit;
 
 namespace Misha.Domain.Tests;
 
