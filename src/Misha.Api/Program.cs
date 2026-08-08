@@ -5,6 +5,7 @@ using Misha.Application.Applications;
 using Misha.Application.Documents;
 using Misha.Application.Watchlists;
 using Misha.Domain.Documents;
+using Misha.Infrastructure.Documents;
 using Misha.Infrastructure.Persistence;
 using Misha.Infrastructure.Storage;
 using Misha.Infrastructure.Watchlists;
@@ -23,9 +24,11 @@ builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactReposi
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
 builder.Services.AddScoped<IWatchlistProvider, UnavailableWatchlistProvider>();
+builder.Services.AddScoped<IPassportVerificationProvider, UnavailablePassportVerificationProvider>();
 builder.Services.AddScoped<ApplicationService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<PassportService>();
+builder.Services.AddScoped<PassportVerificationService>();
 builder.Services.AddScoped<WatchlistService>();
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
@@ -183,6 +186,25 @@ app.MapGet("/applications/{id:guid}/passport", async (Guid id, PassportService s
             passport.IsExpired(DateOnly.FromDateTime(DateTime.UtcNow))));
 });
 
+app.MapPost("/applications/{id:guid}/passport/verify", async (
+    Guid id,
+    PassportVerificationService service,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var result = await service.VerifyAsync(id, ct);
+        return Results.Ok(new PassportVerificationResponse(
+            result.Decision.ToString(),
+            result.Reference,
+            result.ErrorMessage));
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+});
+
 app.MapPost("/applications/{id:guid}/watchlist/screen", async (
     Guid id,
     WatchlistService service,
@@ -301,6 +323,11 @@ public sealed record PassportResponse(
     string Nationality,
     DateOnly ExpiryDate,
     bool IsExpired);
+
+public sealed record PassportVerificationResponse(
+    string Decision,
+    string? Reference,
+    string? ErrorMessage);
 
 public sealed record WatchlistResponse(
     Guid Id,
