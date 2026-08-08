@@ -1,15 +1,15 @@
 using Microsoft.EntityFrameworkCore;
-using Misha.Domain.Applications;
+using MishaApplication = Misha.Domain.Applications.Application;
 
 namespace Misha.Infrastructure.Persistence;
 
 public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : DbContext(options)
 {
-    public DbSet<Application> Applications => Set<Application>();
+    public DbSet<MishaApplication> Applications => Set<MishaApplication>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        var application = modelBuilder.Entity<Application>();
+        var application = modelBuilder.Entity<MishaApplication>();
 
         application.ToTable("applications");
         application.HasKey(x => x.Id);
