@@ -94,6 +94,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<int>("Status").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<string>("Provider").HasMaxLength(100).HasColumnType("character varying(100)");
             b.Property<string>("ProviderReference").HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<string>("ActionUrl").HasMaxLength(1000).HasColumnType("character varying(1000)");
             b.Property<string>("FailureReason").HasMaxLength(1000).HasColumnType("character varying(1000)");
             b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
             b.Property<DateTimeOffset?>("CompletedAtUtc").HasColumnType("timestamp with time zone");

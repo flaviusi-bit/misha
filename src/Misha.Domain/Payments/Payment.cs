@@ -21,6 +21,7 @@ public sealed class Payment
     public PaymentStatus Status { get; private set; }
     public string? Provider { get; private set; }
     public string? ProviderReference { get; private set; }
+    public string? ActionUrl { get; private set; }
     public string? FailureReason { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset? CompletedAtUtc { get; private set; }
@@ -43,11 +44,12 @@ public sealed class Payment
         return new Payment(Guid.NewGuid(), applicationId, amountMinor, normalizedCurrency);
     }
 
-    public void MarkRequiresAction(string provider, string? providerReference = null)
+    public void MarkRequiresAction(string provider, string? providerReference = null, string? actionUrl = null)
     {
         EnsurePending();
         Provider = RequireProvider(provider);
         ProviderReference = providerReference?.Trim();
+        ActionUrl = ValidateActionUrl(actionUrl);
         Status = PaymentStatus.RequiresAction;
     }
 
@@ -58,6 +60,7 @@ public sealed class Payment
 
         Provider = RequireProvider(provider);
         ProviderReference = providerReference?.Trim();
+        ActionUrl = null;
         Status = PaymentStatus.Paid;
         CompletedAtUtc = DateTimeOffset.UtcNow;
         FailureReason = null;
@@ -72,6 +75,7 @@ public sealed class Payment
             throw new ArgumentException("A payment failure reason is required.", nameof(reason));
 
         Status = PaymentStatus.Failed;
+        ActionUrl = null;
         FailureReason = reason.Trim();
     }
 
@@ -81,6 +85,7 @@ public sealed class Payment
             throw new InvalidOperationException($"Payment in status '{Status}' cannot be cancelled.");
 
         Status = PaymentStatus.Cancelled;
+        ActionUrl = null;
     }
 
     private void EnsurePending()
@@ -95,5 +100,17 @@ public sealed class Payment
             throw new ArgumentException("Payment provider is required.", nameof(provider));
 
         return provider.Trim();
+    }
+
+    private static string? ValidateActionUrl(string? actionUrl)
+    {
+        if (string.IsNullOrWhiteSpace(actionUrl))
+            return null;
+
+        if (!Uri.TryCreate(actionUrl.Trim(), UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps)
+            throw new ArgumentException("Payment action URL must be an absolute HTTPS URL.", nameof(actionUrl));
+
+        return uri.ToString();
     }
 }

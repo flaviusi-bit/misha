@@ -35,7 +35,28 @@ public sealed class PaymentTests
         Assert.Equal(PaymentStatus.Paid, payment.Status);
         Assert.Equal("stripe", payment.Provider);
         Assert.Equal("pay_123", payment.ProviderReference);
+        Assert.Null(payment.ActionUrl);
         Assert.NotNull(payment.CompletedAtUtc);
+    }
+
+    [Fact]
+    public void MarkRequiresAction_stores_secure_action_url()
+    {
+        var payment = Payment.Create(Guid.NewGuid(), 12500, "EUR");
+
+        payment.MarkRequiresAction("provider", "pay_123", "https://payments.example/checkout/pay_123");
+
+        Assert.Equal(PaymentStatus.RequiresAction, payment.Status);
+        Assert.Equal("https://payments.example/checkout/pay_123", payment.ActionUrl);
+    }
+
+    [Fact]
+    public void MarkRequiresAction_rejects_non_https_action_url()
+    {
+        var payment = Payment.Create(Guid.NewGuid(), 12500, "EUR");
+
+        Assert.Throws<ArgumentException>(() =>
+            payment.MarkRequiresAction("provider", "pay_123", "http://payments.example/checkout/pay_123"));
     }
 
     [Fact]

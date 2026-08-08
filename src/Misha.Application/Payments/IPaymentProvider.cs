@@ -14,4 +14,5 @@ public interface IPaymentProvider
 public sealed record PaymentProviderResult(
     PaymentStatus Status,
     string? ProviderReference = null,
+    string? ActionUrl = null,
     string? ErrorMessage = null);
