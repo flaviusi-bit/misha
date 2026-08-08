@@ -8,6 +8,7 @@ namespace Misha.Infrastructure.Persistence;
 public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : DbContext(options)
 {
     public DbSet<MishaApplication> Applications => Set<MishaApplication>();
+    public DbSet<DocumentArtifact> DocumentArtifacts => Set<DocumentArtifact>();
     public DbSet<PassportDocument> PassportDocuments => Set<PassportDocument>();
     public DbSet<WatchlistCheck> WatchlistChecks => Set<WatchlistCheck>();
 
@@ -22,6 +23,19 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         application.Property(x => x.RefusalReason).HasMaxLength(1000);
         application.HasIndex(x => x.ApplicantReference);
         application.HasIndex(x => x.Status);
+
+        var document = modelBuilder.Entity<DocumentArtifact>();
+        document.ToTable("document_artifacts");
+        document.HasKey(x => x.Id);
+        document.Property(x => x.DocumentType).HasConversion<string>().HasMaxLength(32).IsRequired();
+        document.Property(x => x.FileName).HasMaxLength(255).IsRequired();
+        document.Property(x => x.ContentType).HasMaxLength(200).IsRequired();
+        document.Property(x => x.SizeBytes).IsRequired();
+        document.Property(x => x.Sha256).HasMaxLength(64).IsRequired();
+        document.Property(x => x.StorageKey).HasMaxLength(500).IsRequired();
+        document.Property(x => x.CreatedAtUtc).IsRequired();
+        document.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
+        document.HasIndex(x => x.Sha256);
 
         var passport = modelBuilder.Entity<PassportDocument>();
         passport.ToTable("passport_documents");
