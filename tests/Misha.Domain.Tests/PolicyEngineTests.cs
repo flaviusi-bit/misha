@@ -80,6 +80,20 @@ public sealed class PolicyEngineTests
     }
 
     [Fact]
+    public void Missing_passport_does_not_make_application_eligible()
+    {
+        var result = engine.Evaluate(new PolicyContext(
+            ApplicationStatus.Processing,
+            HasPassport: false,
+            PassportExpired: false,
+            PassportVerificationDecision.NotVerified,
+            WatchlistDecision.Clear));
+
+        Assert.Equal(PolicyDecision.NotReady, result.Decision);
+        Assert.Contains("passport", result.Reasons.Single(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Application_outside_processing_is_not_ready()
     {
         var result = engine.Evaluate(new PolicyContext(
