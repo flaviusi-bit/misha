@@ -27,19 +27,20 @@ public sealed class HttpWatchlistProvider(
 
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttps)
         {
-            return new WatchlistProviderResult(
-                WatchlistDecision.Error,
-                ErrorMessage: "Watchlist provider is not configured with an HTTPS BaseUrl.");
+            return Error("Watchlist provider is not configured with an HTTPS BaseUrl.");
+        }
+
+        if (!Uri.TryCreate(endpoint, UriKind.Relative, out var relativeEndpoint))
+        {
+            return Error("Watchlist provider Endpoint must be a relative path.");
         }
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            return new WatchlistProviderResult(
-                WatchlistDecision.Error,
-                ErrorMessage: "Watchlist provider API key is not configured.");
+            return Error("Watchlist provider API key is not configured.");
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, endpoint))
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, relativeEndpoint))
         {
             Content = JsonContent.Create(new WatchlistRequest(
                 passport.DocumentNumber,
@@ -59,48 +60,39 @@ public sealed class HttpWatchlistProvider(
 
             if (!response.IsSuccessStatusCode)
             {
-                return new WatchlistProviderResult(
-                    WatchlistDecision.Error,
-                    ErrorMessage: $"Watchlist provider returned HTTP {(int)response.StatusCode}.");
+                return Error($"Watchlist provider returned HTTP {(int)response.StatusCode}.");
             }
 
             var result = await response.Content.ReadFromJsonAsync<WatchlistResponse>(cancellationToken);
             if (result is null)
             {
-                return new WatchlistProviderResult(
-                    WatchlistDecision.Error,
-                    ErrorMessage: "Watchlist provider returned an empty response.");
+                return Error("Watchlist provider returned an empty response.");
             }
 
             if (!Enum.TryParse<WatchlistDecision>(result.Decision, ignoreCase: true, out var decision) ||
                 decision is WatchlistDecision.NotChecked or WatchlistDecision.Error)
             {
-                return new WatchlistProviderResult(
-                    WatchlistDecision.Error,
-                    ErrorMessage: "Watchlist provider returned an invalid decision.");
+                return Error("Watchlist provider returned an invalid decision.");
             }
 
             return new WatchlistProviderResult(decision, result.MatchReference, result.ErrorMessage);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new WatchlistProviderResult(
-                WatchlistDecision.Error,
-                ErrorMessage: "Watchlist provider request timed out.");
+            return Error("Watchlist provider request timed out.");
         }
         catch (HttpRequestException ex)
         {
-            return new WatchlistProviderResult(
-                WatchlistDecision.Error,
-                ErrorMessage: $"Watchlist provider request failed: {ex.Message}");
+            return Error($"Watchlist provider request failed: {ex.Message}");
         }
         catch (JsonException ex)
         {
-            return new WatchlistProviderResult(
-                WatchlistDecision.Error,
-                ErrorMessage: $"Watchlist provider returned invalid JSON: {ex.Message}");
+            return Error($"Watchlist provider returned invalid JSON: {ex.Message}");
         }
     }
+
+    private static WatchlistProviderResult Error(string message) =>
+        new(WatchlistDecision.Error, ErrorMessage: message);
 
     private sealed record WatchlistRequest(
         string DocumentNumber,
