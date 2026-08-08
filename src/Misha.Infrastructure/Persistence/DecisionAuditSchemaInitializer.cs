@@ -1,14 +1,15 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Misha.Infrastructure.Persistence;
 
-public sealed class DecisionAuditSchemaInitializer(
-    IDbContextFactory<MishaDbContext> dbContextFactory) : IHostedService
+public sealed class DecisionAuditSchemaInitializer(IServiceScopeFactory scopeFactory) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<MishaDbContext>();
 
         await db.Database.ExecuteSqlRawAsync("""
             CREATE TABLE IF NOT EXISTS decision_audits (
