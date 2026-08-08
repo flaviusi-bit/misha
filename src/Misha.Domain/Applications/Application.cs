@@ -17,6 +17,10 @@ public sealed class Application
     public ApplicationStatus Status { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset? SubmittedAtUtc { get; private set; }
+    public DateTimeOffset? ProcessingStartedAtUtc { get; private set; }
+    public DateTimeOffset? DecidedAtUtc { get; private set; }
+    public DateTimeOffset? CancelledAtUtc { get; private set; }
+    public string? RefusalReason { get; private set; }
 
     public static Application Create(string applicantReference)
     {
@@ -28,10 +32,53 @@ public sealed class Application
 
     public void Submit()
     {
-        if (Status != ApplicationStatus.Draft)
-            throw new InvalidOperationException("Only draft applications can be submitted.");
+        EnsureStatus(ApplicationStatus.Draft);
 
         Status = ApplicationStatus.Submitted;
         SubmittedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    public void StartProcessing()
+    {
+        EnsureStatus(ApplicationStatus.Submitted);
+
+        Status = ApplicationStatus.Processing;
+        ProcessingStartedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    public void Approve()
+    {
+        EnsureStatus(ApplicationStatus.Processing);
+
+        Status = ApplicationStatus.Approved;
+        DecidedAtUtc = DateTimeOffset.UtcNow;
+        RefusalReason = null;
+    }
+
+    public void Refuse(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("A refusal reason is required.", nameof(reason));
+
+        EnsureStatus(ApplicationStatus.Processing);
+
+        Status = ApplicationStatus.Refused;
+        DecidedAtUtc = DateTimeOffset.UtcNow;
+        RefusalReason = reason.Trim();
+    }
+
+    public void Cancel()
+    {
+        if (Status is not (ApplicationStatus.Draft or ApplicationStatus.Submitted or ApplicationStatus.Processing))
+            throw new InvalidOperationException($"Applications in status '{Status}' cannot be cancelled.");
+
+        Status = ApplicationStatus.Cancelled;
+        CancelledAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    private void EnsureStatus(ApplicationStatus expected)
+    {
+        if (Status != expected)
+            throw new InvalidOperationException($"Application in status '{Status}' cannot transition to the requested state.");
     }
 }
