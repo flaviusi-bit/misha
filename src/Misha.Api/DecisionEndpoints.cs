@@ -42,9 +42,38 @@ public static class DecisionEndpoints
                 return Results.Conflict(new { error = ex.Message });
             }
         }).RequireAuthorization();
+
+        app.MapGet("/applications/{id:guid}/decision/audit", async (
+            Guid id,
+            IDecisionAuditRepository audits,
+            CancellationToken ct) =>
+        {
+            var records = await audits.GetByApplicationAsync(id, ct);
+            return Results.Ok(records.Select(ToAuditResponse));
+        }).RequireAuthorization();
     }
+
+    private static DecisionAuditResponse ToAuditResponse(Misha.Domain.Decisions.DecisionAudit audit) => new(
+        audit.Id,
+        audit.ApplicationId,
+        audit.PolicyVersion,
+        audit.PolicyDecision,
+        audit.Decision,
+        audit.ReasonsJson,
+        audit.ActorReference,
+        audit.CreatedAtUtc);
 
     private sealed record DecisionResponse(
         string Decision,
         IReadOnlyList<string> Reasons);
+
+    private sealed record DecisionAuditResponse(
+        Guid Id,
+        Guid ApplicationId,
+        string PolicyVersion,
+        string PolicyDecision,
+        string Decision,
+        string ReasonsJson,
+        string ActorReference,
+        DateTimeOffset CreatedAtUtc);
 }
