@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using Misha.Application.Etas;
 using Misha.Infrastructure.Persistence;
 
@@ -55,6 +56,16 @@ public static class EtaServiceRegistration
             catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
             catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
         }).RequireAuthorization();
+
+        // Public by design: the token is carried only in the URL fragment and is never sent
+        // to the server as part of the initial GET request. The page submits it to the rate-limited
+        // verification API after loading.
+        app.MapGet("/eta/verify/{etaNumber}", (HttpResponse response) =>
+        {
+            var nonce = EtaVerificationPage.CreateNonce();
+            EtaVerificationPage.ApplySecurityHeaders(response, nonce);
+            return Results.Content(EtaVerificationPage.Create(nonce), "text/html", Encoding.UTF8);
+        });
 
         // Public by design: only the opaque ETA number + secret verification token are accepted.
         // No applicant or application data is returned by this endpoint.

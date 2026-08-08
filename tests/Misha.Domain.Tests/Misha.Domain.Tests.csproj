@@ -15,5 +15,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Misha.Domain/Misha.Domain.csproj" />
     <ProjectReference Include="../../src/Misha.Application/Misha.Application.csproj" />
+    <ProjectReference Include="../../src/Misha.Api/Misha.Api.csproj" />
   </ItemGroup>
 </Project>
