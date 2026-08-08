@@ -5,14 +5,14 @@ namespace Misha.Api;
 
 public static class EtaServiceRegistration
 {
-    public static void AddEtaServices(IServiceCollection services, IConfiguration configuration)
+    public static void AddEtaServices(IServiceCollection services, IConfiguration? configuration = null)
     {
         services.AddScoped<IEtaRepository, EfEtaRepository>();
-        var validityDays = configuration.GetValue<int?>("Eta:ValidityDays") ?? 90;
-        services.AddScoped<EtaService>(_ => new EtaService(
-            _.GetRequiredService<Misha.Application.Applications.IApplicationRepository>(),
-            _.GetRequiredService<Misha.Application.Payments.IPaymentRepository>(),
-            _.GetRequiredService<IEtaRepository>(),
+        var validityDays = configuration?.GetValue<int?>("Eta:ValidityDays") ?? 90;
+        services.AddScoped<EtaService>(sp => new EtaService(
+            sp.GetRequiredService<Misha.Application.Applications.IApplicationRepository>(),
+            sp.GetRequiredService<Misha.Application.Payments.IPaymentRepository>(),
+            sp.GetRequiredService<IEtaRepository>(),
             validityDays));
     }
 
