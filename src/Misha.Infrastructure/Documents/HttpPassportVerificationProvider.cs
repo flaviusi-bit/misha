@@ -32,7 +32,7 @@ public sealed class HttpPassportVerificationProvider(
                 ErrorMessage: "Passport verification provider is not configured with an HTTPS BaseUrl.");
         }
 
-        if (string.IsNullOrWhiteSpace(endpoint) || !endpoint.StartsWith('/', StringComparison.Ordinal) ||
+        if (string.IsNullOrWhiteSpace(endpoint) || !endpoint.StartsWith("/", StringComparison.Ordinal) ||
             Uri.TryCreate(endpoint, UriKind.Absolute, out _))
         {
             return new PassportVerificationResult(
