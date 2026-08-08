@@ -1,5 +1,6 @@
 using Misha.Application.Applications;
 using Misha.Application.Documents;
+using Misha.Application.Watchlists;
 using Misha.Domain.Applications;
 using Misha.Domain.Watchlists;
 
