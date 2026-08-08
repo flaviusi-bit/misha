@@ -62,7 +62,6 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("DocumentNumber").IsRequired().HasMaxLength(50).HasColumnType("character varying(50)");
             b.Property<string>("IssuingCountry").IsRequired().HasMaxLength(3).HasColumnType("character varying(3)");
             b.Property<string>("Surname").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
-            b.Property<string>("IssuingCountry").IsRequired().HasMaxLength(3).HasColumnType("character varying(3)");
             b.Property<string>("GivenNames").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<string>("Nationality").IsRequired().HasMaxLength(3).HasColumnType("character varying(3)");
             b.HasKey("Id");
