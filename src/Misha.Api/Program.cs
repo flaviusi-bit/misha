@@ -34,6 +34,7 @@ builder.Services.AddScoped<PassportVerificationService>();
 builder.Services.AddScoped<WatchlistService>();
 builder.Services.AddSingleton<IPolicyEngine, DefaultPolicyEngine>();
 builder.Services.AddScoped<PolicyService>();
+Misha.Api.DecisionServiceRegistration.AddDecisionEngine(builder.Services);
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
 builder.Services
@@ -270,6 +271,8 @@ app.MapPost("/applications/{id:guid}/policy/evaluate", async (
         return Results.NotFound(new { error = ex.Message });
     }
 }).RequireAuthorization();
+
+Misha.Api.DecisionEndpoints.Map(app);
 
 app.Run();
 
