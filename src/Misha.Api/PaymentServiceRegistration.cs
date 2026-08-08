@@ -44,6 +44,17 @@ public static class PaymentServiceRegistration
             }
         }).RequireAuthorization();
 
+        app.MapPost("/applications/{id:guid}/payment/reconcile", async (
+            Guid id,
+            PaymentService service,
+            CancellationToken ct) =>
+        {
+            var payment = await service.ReconcileAsync(id, ct);
+            return payment is null
+                ? Results.NotFound()
+                : Results.Ok(ToResponse(payment));
+        }).RequireAuthorization();
+
         app.MapGet("/applications/{id:guid}/payment", async (
             Guid id,
             PaymentService service,

@@ -34,23 +34,7 @@ public sealed class PaymentService(
         try
         {
             var result = await provider.CreateAsync(payment, cancellationToken);
-            switch (result.Status)
-            {
-                case PaymentStatus.Paid:
-                    payment.MarkPaid(provider.Name, result.ProviderReference);
-                    break;
-                case PaymentStatus.RequiresAction:
-                    payment.MarkRequiresAction(provider.Name, result.ProviderReference, result.ActionUrl);
-                    break;
-                case PaymentStatus.Failed:
-                    payment.MarkFailed(result.ErrorMessage ?? "Payment provider returned a failed status.");
-                    break;
-                case PaymentStatus.Pending:
-                    break;
-                default:
-                    payment.MarkFailed(result.ErrorMessage ?? "Payment provider returned an invalid status.");
-                    break;
-            }
+            ApplyProviderResult(payment, result);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -61,6 +45,56 @@ public sealed class PaymentService(
         return payment;
     }
 
+    public async Task<Payment?> ReconcileAsync(
+        Guid applicationId,
+        CancellationToken cancellationToken)
+    {
+        var payment = await payments.GetLatestAsync(applicationId, cancellationToken);
+        if (payment is null || payment.Status is PaymentStatus.Paid or PaymentStatus.Failed or PaymentStatus.Cancelled)
+            return payment;
+
+        if (string.IsNullOrWhiteSpace(payment.ProviderReference))
+            return payment;
+
+        PaymentProviderResult result;
+        try
+        {
+            result = await provider.GetStatusAsync(payment, cancellationToken);
+        }
+        catch (NotSupportedException)
+        {
+            return payment;
+        }
+
+        ApplyProviderResult(payment, result);
+        await payments.SaveChangesAsync(cancellationToken);
+        return payment;
+    }
+
     public Task<Payment?> GetLatestAsync(Guid applicationId, CancellationToken cancellationToken) =>
         payments.GetLatestAsync(applicationId, cancellationToken);
+
+    private void ApplyProviderResult(Payment payment, PaymentProviderResult result)
+    {
+        switch (result.Status)
+        {
+            case PaymentStatus.Paid:
+                payment.MarkPaid(provider.Name, result.ProviderReference ?? payment.ProviderReference);
+                break;
+            case PaymentStatus.RequiresAction:
+                payment.MarkRequiresAction(
+                    provider.Name,
+                    result.ProviderReference ?? payment.ProviderReference,
+                    result.ActionUrl ?? payment.ActionUrl);
+                break;
+            case PaymentStatus.Failed:
+                payment.MarkFailed(result.ErrorMessage ?? "Payment provider returned a failed status.");
+                break;
+            case PaymentStatus.Pending:
+                break;
+            default:
+                payment.MarkFailed(result.ErrorMessage ?? "Payment provider returned an invalid status.");
+                break;
+        }
+    }
 }

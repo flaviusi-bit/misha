@@ -48,7 +48,7 @@ public sealed class Payment
     {
         EnsurePending();
         Provider = RequireProvider(provider);
-        ProviderReference = providerReference?.Trim();
+        ProviderReference = providerReference?.Trim() ?? ProviderReference;
         ActionUrl = ValidateActionUrl(actionUrl);
         Status = PaymentStatus.RequiresAction;
     }
@@ -59,7 +59,7 @@ public sealed class Payment
             throw new InvalidOperationException($"Payment in status '{Status}' cannot be marked paid.");
 
         Provider = RequireProvider(provider);
-        ProviderReference = providerReference?.Trim();
+        ProviderReference = providerReference?.Trim() ?? ProviderReference;
         ActionUrl = null;
         Status = PaymentStatus.Paid;
         CompletedAtUtc = DateTimeOffset.UtcNow;
@@ -90,7 +90,7 @@ public sealed class Payment
 
     private void EnsurePending()
     {
-        if (Status != PaymentStatus.Pending)
+        if (Status is not (PaymentStatus.Pending or PaymentStatus.RequiresAction))
             throw new InvalidOperationException($"Payment in status '{Status}' cannot require customer action.");
     }
 
