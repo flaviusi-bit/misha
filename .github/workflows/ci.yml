@@ -28,3 +28,5 @@ jobs:
 
       - name: Test
         run: dotnet test Misha.slnx --configuration Release --no-build --verbosity normal
+
+# CI trigger verification: run on every main push.
