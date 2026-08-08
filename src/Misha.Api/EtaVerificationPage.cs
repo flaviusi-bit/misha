@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 
 namespace Misha.Api;
 
@@ -77,7 +76,7 @@ public static class EtaVerificationPage
 
     public static void ApplySecurityHeaders(HttpResponse response, string nonce)
     {
-        response.Headers.ContentSecurityPolicy =
+        response.Headers["Content-Security-Policy"] =
             $"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
         response.Headers["Referrer-Policy"] = "no-referrer";
         response.Headers["X-Content-Type-Options"] = "nosniff";
