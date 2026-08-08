@@ -25,8 +25,18 @@ public sealed class EtaTests
         var (eta, token) = Eta.Issue(Guid.NewGuid(), 90);
 
         Assert.NotEqual(token, eta.VerificationTokenHash);
+        Assert.Equal(eta.VerificationTokenHash, Eta.HashVerificationToken(token));
         Assert.True(eta.MatchesVerificationToken(token));
         Assert.False(eta.MatchesVerificationToken("wrong-token"));
+    }
+
+    [Fact]
+    public void Verification_token_hash_is_deterministic()
+    {
+        const string token = "test-verification-token";
+
+        Assert.Equal(Eta.HashVerificationToken(token), Eta.HashVerificationToken(token));
+        Assert.NotEqual(Eta.HashVerificationToken(token), Eta.HashVerificationToken("another-token"));
     }
 
     [Fact]
