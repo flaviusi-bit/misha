@@ -15,7 +15,10 @@ public static class DecisionServiceRegistration
         services.AddHostedService<DecisionAuditSchemaInitializer>();
 
         // Registered after the legacy unavailable provider so this becomes the active gateway.
-        services.AddHttpClient();
+        services.AddHttpClient("watchlist", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
         services.AddScoped<IWatchlistProvider, HttpWatchlistProvider>();
     }
 }
