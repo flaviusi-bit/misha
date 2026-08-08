@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Applications;
 using Misha.Application.Documents;
+using Misha.Application.Policy;
 using Misha.Application.Watchlists;
 using Misha.Domain.Documents;
 using Misha.Infrastructure.Documents;
@@ -31,6 +32,8 @@ builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<PassportService>();
 builder.Services.AddScoped<PassportVerificationService>();
 builder.Services.AddScoped<WatchlistService>();
+builder.Services.AddSingleton<IPolicyEngine, DefaultPolicyEngine>();
+builder.Services.AddScoped<PolicyService>();
 builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
 
 builder.Services
@@ -250,6 +253,24 @@ app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService
             check.CheckedAtUtc));
 }).RequireAuthorization();
 
+app.MapPost("/applications/{id:guid}/policy/evaluate", async (
+    Guid id,
+    PolicyService service,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var evaluation = await service.EvaluateAsync(id, ct);
+        return Results.Ok(new PolicyEvaluationResponse(
+            evaluation.Decision.ToString(),
+            evaluation.Reasons));
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
 app.Run();
 
 static DocumentResponse ToDocumentResponse(DocumentArtifact document) => new(
@@ -351,3 +372,7 @@ public sealed record WatchlistResponse(
     string? MatchReference,
     string? ErrorMessage,
     DateTimeOffset? CheckedAtUtc);
+
+public sealed record PolicyEvaluationResponse(
+    string Decision,
+    IReadOnlyList<string> Reasons);
