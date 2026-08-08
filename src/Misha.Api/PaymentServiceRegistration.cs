@@ -10,6 +10,10 @@ public static class PaymentServiceRegistration
     {
         services.AddScoped<IPaymentRepository, EfPaymentRepository>();
         services.AddScoped<IPaymentProvider, HttpPaymentProvider>();
+        services.AddHttpClient("payment-provider", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
         services.AddScoped<PaymentService>();
     }
 
