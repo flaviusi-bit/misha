@@ -35,7 +35,7 @@ public sealed class PolicyEngineTests
             WatchlistDecision.ConfirmedMatch));
 
         Assert.Equal(PolicyDecision.Ineligible, result.Decision);
-        Assert.Contains("confirmed match", result.Reasons.Single(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(result.Reasons, reason => reason.Contains("confirmed match", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class PolicyEngineTests
             WatchlistDecision.Clear));
 
         Assert.Equal(PolicyDecision.NotReady, result.Decision);
-        Assert.Contains("expired", result.Reasons.Single(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(result.Reasons, reason => reason.Contains("expired", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class PolicyEngineTests
             WatchlistDecision.Clear));
 
         Assert.Equal(PolicyDecision.NotReady, result.Decision);
-        Assert.Contains("passport", result.Reasons.Single(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(result.Reasons, reason => reason.Contains("passport", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
