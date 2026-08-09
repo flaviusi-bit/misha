@@ -4,6 +4,7 @@ using Misha.Domain.Decisions;
 using Misha.Domain.Documents;
 using Misha.Domain.Etas;
 using Misha.Domain.ManualReviews;
+using Misha.Domain.Notifications;
 using Misha.Domain.Payments;
 using Misha.Domain.Watchlists;
 
@@ -20,6 +21,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
     public DbSet<Eta> Etas => Set<Eta>();
     public DbSet<EtaAudit> EtaAudits => Set<EtaAudit>();
     public DbSet<ManualReviewCase> ManualReviewCases => Set<ManualReviewCase>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -130,5 +132,18 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         manualReview.Property(x => x.CreatedAtUtc).IsRequired();
         manualReview.HasIndex(x => new { x.Status, x.CreatedAtUtc });
         manualReview.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
+
+        var notification = modelBuilder.Entity<Notification>();
+        notification.ToTable("notifications");
+        notification.HasKey(x => x.Id);
+        notification.Property(x => x.RecipientReference).HasMaxLength(200).IsRequired();
+        notification.Property(x => x.Channel).HasMaxLength(32).IsRequired();
+        notification.Property(x => x.Template).HasMaxLength(100).IsRequired();
+        notification.Property(x => x.Payload).HasColumnType("text").IsRequired();
+        notification.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+        notification.Property(x => x.LastError).HasMaxLength(2000);
+        notification.Property(x => x.CreatedAtUtc).IsRequired();
+        notification.HasIndex(x => new { x.Status, x.CreatedAtUtc });
+        notification.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
     }
 }
