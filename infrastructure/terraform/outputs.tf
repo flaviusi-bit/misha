@@ -30,6 +30,18 @@ output "ecs_api_task_definition" {
   value = aws_ecs_task_definition.api.family
 }
 
+output "ecs_api_service_name" {
+  value = aws_ecs_service.api.name
+}
+
+output "api_load_balancer_dns_name" {
+  value = aws_lb.api.dns_name
+}
+
+output "nat_gateway_id" {
+  value = aws_nat_gateway.this.id
+}
+
 output "rds_endpoint" {
   value = aws_db_instance.postgres.address
 }
