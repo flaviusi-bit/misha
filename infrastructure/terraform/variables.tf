@@ -59,6 +59,18 @@ variable "container_image" {
   default     = ""
 }
 
+variable "domain_name" {
+  type        = string
+  description = "Public API DNS name. Leave empty to keep the HTTP-only development listener."
+  default     = ""
+}
+
+variable "route53_zone_id" {
+  type        = string
+  description = "Route53 hosted zone ID for the API domain. Leave empty to keep the HTTP-only development listener."
+  default     = ""
+}
+
 variable "enable_deletion_protection" {
   type        = bool
   description = "Protect production databases from accidental deletion."
