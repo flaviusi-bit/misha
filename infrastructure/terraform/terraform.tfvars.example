@@ -2,10 +2,17 @@ aws_region  = "eu-central-1"
 environment  = "dev"
 vpc_cidr     = "10.40.0.0/16"
 
-db_name              = "misha"
-db_username          = "misha"
-db_instance_class    = "db.t4g.micro"
-ecs_cpu              = 512
-ecs_memory           = 1024
-container_image      = ""
+db_name                   = "misha"
+db_username               = "misha"
+db_instance_class         = "db.t4g.micro"
+ecs_cpu                   = 512
+ecs_memory                = 1024
+container_image           = ""
+ecs_desired_count         = 1
+domain_name               = ""
+route53_zone_id           = ""
 enable_deletion_protection = false
+
+# Production example:
+# domain_name     = "api.example.com"
+# route53_zone_id = "Z0123456789EXAMPLE"
