@@ -41,7 +41,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: '1.8.x'
+          terraform_version: '1.10.x'
 
       - name: Terraform init
         working-directory: infrastructure/terraform
@@ -49,6 +49,19 @@ jobs:
 
       - name: Terraform validate
         working-directory: infrastructure/terraform
+        run: terraform validate
+
+      - name: Setup Terraform for state bootstrap
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.10.x'
+
+      - name: Terraform bootstrap init
+        working-directory: infrastructure/terraform-bootstrap
+        run: terraform init
+
+      - name: Terraform bootstrap validate
+        working-directory: infrastructure/terraform-bootstrap
         run: terraform validate
 
 # CI trigger verification: run on every main/feature push and pull request.
