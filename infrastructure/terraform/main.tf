@@ -209,7 +209,10 @@ resource "aws_iam_role_policy" "ecs_task" {
 
 resource "aws_ecs_cluster" "this" {
   name = local.name
-  setting { name = "containerInsights", value = "enabled" }
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
 }
 
 resource "aws_ecs_task_definition" "api" {
