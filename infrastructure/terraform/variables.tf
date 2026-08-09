@@ -23,18 +23,18 @@ variable "availability_zones" {
 }
 
 variable "db_name" {
-  type        = string
-  default     = "misha"
+  type    = string
+  default = "misha"
 }
 
 variable "db_username" {
-  type        = string
-  default     = "misha"
+  type    = string
+  default = "misha"
 }
 
 variable "db_instance_class" {
-  type        = string
-  default     = "db.t4g.micro"
+  type    = string
+  default = "db.t4g.micro"
 }
 
 variable "ecs_cpu" {
@@ -45,6 +45,12 @@ variable "ecs_cpu" {
 variable "ecs_memory" {
   type    = number
   default = 1024
+}
+
+variable "ecs_desired_count" {
+  type        = number
+  description = "Desired number of ECS API tasks."
+  default     = 1
 }
 
 variable "container_image" {
