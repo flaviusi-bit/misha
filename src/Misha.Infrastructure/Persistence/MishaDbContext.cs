@@ -139,7 +139,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         notification.Property(x => x.RecipientReference).HasMaxLength(200).IsRequired();
         notification.Property(x => x.Channel).HasMaxLength(32).IsRequired();
         notification.Property(x => x.Template).HasMaxLength(100).IsRequired();
-        notification.Property(x => x.Payload).HasColumnType("jsonb").IsRequired();
+        notification.Property(x => x.Payload).HasColumnType("text").IsRequired();
         notification.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         notification.Property(x => x.LastError).HasMaxLength(2000);
         notification.Property(x => x.CreatedAtUtc).IsRequired();
