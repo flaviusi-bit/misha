@@ -2,9 +2,15 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_route53_zone" "primary" {
+  count   = var.route53_zone_id != "" ? 1 : 0
+  zone_id = var.route53_zone_id
+}
+
 locals {
-  name = "misha-${var.environment}"
-  azs  = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, 2)
+  name        = "misha-${var.environment}"
+  azs         = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, 2)
+  tls_enabled = var.domain_name != "" && var.route53_zone_id != ""
 }
 
 resource "aws_vpc" "this" {
@@ -251,13 +257,88 @@ resource "aws_lb_target_group" "api" {
   }
 }
 
+resource "aws_acm_certificate" "api" {
+  count             = local.tls_enabled ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "acm_validation" {
+  for_each = local.tls_enabled ? {
+    for option in aws_acm_certificate.api[0].domain_validation_options : option.domain_name => {
+      name   = option.resource_record_name
+      type   = option.resource_record_type
+      record = option.resource_record_value
+    }
+  } : {}
+
+  zone_id         = var.route53_zone_id
+  name            = each.value.name
+  type            = each.value.type
+  ttl             = 60
+  records         = [each.value.record]
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "api" {
+  count                   = local.tls_enabled ? 1 : 0
+  certificate_arn         = aws_acm_certificate.api[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.acm_validation : record.fqdn]
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.api.arn
   port              = 80
   protocol          = "HTTP"
+
+  dynamic "default_action" {
+    for_each = local.tls_enabled ? [1] : []
+    content {
+      type = "redirect"
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+  }
+
+  dynamic "default_action" {
+    for_each = local.tls_enabled ? [] : [1]
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.api.arn
+    }
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  count             = local.tls_enabled ? 1 : 0
+  load_balancer_arn = aws_lb.api.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate_validation.api[0].certificate_arn
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
+  }
+}
+
+resource "aws_route53_record" "api" {
+  count   = local.tls_enabled ? 1 : 0
+  zone_id = var.route53_zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.api.dns_name
+    zone_id                = aws_lb.api.zone_id
+    evaluate_target_health = true
   }
 }
 
@@ -277,7 +358,7 @@ resource "aws_ecs_service" "api" {
     container_name   = "api"
     container_port   = 8080
   }
-  depends_on = [aws_lb_listener.http]
+  depends_on = [aws_lb_listener.http, aws_lb_listener.https]
 }
 
 resource "aws_secretsmanager_secret" "application" {
