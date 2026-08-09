@@ -1,0 +1,1 @@
+ECS Fargate service runs in private subnets behind the ALB. NAT provides outbound access. ALB health checks /health/ready. HTTP/80 is used for the current dev infrastructure slice; TLS/DNS is a later production slice.
