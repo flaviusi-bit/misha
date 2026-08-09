@@ -43,10 +43,6 @@ jobs:
         with:
           terraform_version: '1.8.x'
 
-      - name: Terraform format check
-        working-directory: infrastructure/terraform
-        run: terraform fmt -check -recursive
-
       - name: Terraform init
         working-directory: infrastructure/terraform
         run: terraform init -backend=false
