@@ -38,6 +38,14 @@ output "api_load_balancer_dns_name" {
   value = aws_lb.api.dns_name
 }
 
+output "api_url" {
+  value = local.tls_enabled ? "https://${var.domain_name}" : "http://${aws_lb.api.dns_name}"
+}
+
+output "acm_certificate_arn" {
+  value = local.tls_enabled ? aws_acm_certificate.api[0].arn : null
+}
+
 output "nat_gateway_id" {
   value = aws_nat_gateway.this.id
 }
