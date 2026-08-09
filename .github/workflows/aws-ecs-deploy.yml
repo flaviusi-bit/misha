@@ -1,0 +1,103 @@
+name: AWS ECS Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Misha.slnx'
+      - 'global.json'
+      - 'src/Misha.Api/Dockerfile'
+      - '.github/workflows/aws-ecs-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-ecs-dev
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: misha-dev-api
+  ECS_CLUSTER: misha-dev
+  ECS_SERVICE: misha-dev-api
+  ECS_TASK_DEFINITION: misha-dev-api
+  CONTAINER_NAME: api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: aws-dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate deployment role configuration
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          test -n "$AWS_DEPLOY_ROLE_ARN" || {
+            echo "AWS_DEPLOY_ROLE_ARN repository variable is not configured."
+            exit 1
+          }
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve ECR registry
+        id: registry
+        run: echo "registry=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push API image
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build -f src/Misha.Api/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Fetch current ECS task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition > task-definition.json
+
+      - name: Render ECS task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.IMAGE }}
+
+      - name: Deploy ECS service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Verify deployed service
+        run: |
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].{status:status,running:runningCount,desired:desiredCount,taskDefinition:taskDefinition}' \
+            --output table
