@@ -4,8 +4,7 @@ data "aws_availability_zones" "available" {
 
 locals {
   name = "misha-${var.environment}"
-
-  azs = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, 2)
+  azs  = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
 resource "aws_vpc" "this" {
@@ -20,7 +19,6 @@ resource "aws_internet_gateway" "this" {
 
 resource "aws_subnet" "public" {
   for_each = { for i, az in local.azs : az => i }
-
   vpc_id                  = aws_vpc.this.id
   availability_zone       = each.key
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, each.value)
@@ -29,7 +27,6 @@ resource "aws_subnet" "public" {
 
 resource "aws_subnet" "private" {
   for_each = { for i, az in local.azs : az => i }
-
   vpc_id            = aws_vpc.this.id
   availability_zone = each.key
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, each.value + 16)
@@ -37,7 +34,6 @@ resource "aws_subnet" "private" {
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.this.id
-
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.this.id
@@ -46,18 +42,30 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table_association" "public" {
   for_each = aws_subnet.public
-
   subnet_id      = each.value.id
   route_table_id = aws_route_table.public.id
 }
 
+resource "aws_eip" "nat" {
+  domain = "vpc"
+}
+
+resource "aws_nat_gateway" "this" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = values(aws_subnet.public)[0].id
+  depends_on    = [aws_internet_gateway.this]
+}
+
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.this.id
+  }
 }
 
 resource "aws_route_table_association" "private" {
   for_each = aws_subnet.private
-
   subnet_id      = each.value.id
   route_table_id = aws_route_table.private.id
 }
@@ -65,21 +73,18 @@ resource "aws_route_table_association" "private" {
 resource "aws_security_group" "alb" {
   name   = "${local.name}-alb"
   vpc_id = aws_vpc.this.id
-
   ingress {
     protocol    = "tcp"
     from_port   = 80
     to_port     = 80
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   ingress {
     protocol    = "tcp"
     from_port   = 443
     to_port     = 443
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   egress {
     protocol    = "-1"
     from_port   = 0
@@ -91,14 +96,12 @@ resource "aws_security_group" "alb" {
 resource "aws_security_group" "ecs" {
   name   = "${local.name}-ecs"
   vpc_id = aws_vpc.this.id
-
   ingress {
     protocol        = "tcp"
     from_port       = 8080
     to_port         = 8080
     security_groups = [aws_security_group.alb.id]
   }
-
   egress {
     protocol    = "-1"
     from_port   = 0
@@ -110,7 +113,6 @@ resource "aws_security_group" "ecs" {
 resource "aws_security_group" "rds" {
   name   = "${local.name}-rds"
   vpc_id = aws_vpc.this.id
-
   ingress {
     protocol        = "tcp"
     from_port       = 5432
@@ -125,7 +127,6 @@ resource "aws_s3_bucket" "documents" {
 
 resource "aws_s3_bucket_public_access_block" "documents" {
   bucket = aws_s3_bucket.documents.id
-
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -134,19 +135,13 @@ resource "aws_s3_bucket_public_access_block" "documents" {
 
 resource "aws_s3_bucket_versioning" "documents" {
   bucket = aws_s3_bucket.documents.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
+  versioning_configuration { status = "Enabled" }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "documents" {
   bucket = aws_s3_bucket.documents.id
-
   rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
   }
 }
 
@@ -162,7 +157,6 @@ resource "aws_sqs_queue" "application_events_dlq" {
 
 resource "aws_sqs_queue_redrive_policy" "application_events" {
   queue_url = aws_sqs_queue.application_events.id
-
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.application_events_dlq.arn
     maxReceiveCount     = 5
@@ -176,14 +170,9 @@ resource "aws_cloudwatch_log_group" "api" {
 
 resource "aws_iam_role" "ecs_execution" {
   name = "${local.name}-ecs-execution"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = { Service = "ecs-tasks.amazonaws.com" }
-      Action = "sts:AssumeRole"
-    }]
+    Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }
 
@@ -194,45 +183,27 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
 
 resource "aws_iam_role" "ecs_task" {
   name = "${local.name}-ecs-task"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = { Service = "ecs-tasks.amazonaws.com" }
-      Action = "sts:AssumeRole"
-    }]
+    Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }
 
 resource "aws_iam_role_policy" "ecs_task" {
   name = "${local.name}-ecs-task-policy"
   role = aws_iam_role.ecs_task.id
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Effect = "Allow"
-        Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-        Resource = "${aws_s3_bucket.documents.arn}/*"
-      },
-      {
-        Effect = "Allow"
-        Action = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
-        Resource = aws_sqs_queue.application_events.arn
-      }
+      { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = "${aws_s3_bucket.documents.arn}/*" },
+      { Effect = "Allow", Action = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"], Resource = aws_sqs_queue.application_events.arn }
     ]
   })
 }
 
 resource "aws_ecs_cluster" "this" {
   name = local.name
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
+  setting { name = "containerInsights", value = "enabled" }
 }
 
 resource "aws_ecs_task_definition" "api" {
@@ -243,25 +214,14 @@ resource "aws_ecs_task_definition" "api" {
   memory                   = var.ecs_memory
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
-
   container_definitions = jsonencode([{
     name      = "api"
     image     = var.container_image != "" ? var.container_image : "public.ecr.aws/docker/library/nginx:1.27-alpine"
     essential = true
-
-    portMappings = [{
-      containerPort = 8080
-      hostPort      = 8080
-      protocol      = "tcp"
-    }]
-
+    portMappings = [{ containerPort = 8080, hostPort = 8080, protocol = "tcp" }]
     logConfiguration = {
       logDriver = "awslogs"
-      options = {
-        awslogs-group         = aws_cloudwatch_log_group.api.name
-        awslogs-region        = var.aws_region
-        awslogs-stream-prefix = "api"
-      }
+      options = { awslogs-group = aws_cloudwatch_log_group.api.name, awslogs-region = var.aws_region, awslogs-stream-prefix = "api" }
     }
   }])
 }
@@ -280,7 +240,6 @@ resource "aws_lb_target_group" "api" {
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = aws_vpc.this.id
-
   health_check {
     path                = "/health/ready"
     protocol            = "HTTP"
@@ -296,7 +255,6 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.api.arn
   port              = 80
   protocol          = "HTTP"
-
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.api.arn
@@ -309,19 +267,16 @@ resource "aws_ecs_service" "api" {
   task_definition = aws_ecs_task_definition.api.arn
   desired_count   = var.ecs_desired_count
   launch_type     = "FARGATE"
-
   network_configuration {
     subnets          = [for subnet in aws_subnet.private : subnet.id]
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = false
   }
-
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
     container_name   = "api"
     container_port   = 8080
   }
-
   depends_on = [aws_lb_listener.http]
 }
 
