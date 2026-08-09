@@ -68,6 +68,13 @@ resource "aws_security_group" "alb" {
 
   ingress {
     protocol    = "tcp"
+    from_port   = 80
+    to_port     = 80
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    protocol    = "tcp"
     from_port   = 443
     to_port     = 443
     cidr_blocks = ["0.0.0.0/0"]
@@ -259,6 +266,65 @@ resource "aws_ecs_task_definition" "api" {
   }])
 }
 
+resource "aws_lb" "api" {
+  name               = substr("${local.name}-alb", 0, 32)
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = [for subnet in aws_subnet.public : subnet.id]
+}
+
+resource "aws_lb_target_group" "api" {
+  name        = substr("${local.name}-api", 0, 32)
+  port        = 8080
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = aws_vpc.this.id
+
+  health_check {
+    path                = "/health/ready"
+    protocol            = "HTTP"
+    matcher             = "200-399"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.api.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api.arn
+  }
+}
+
+resource "aws_ecs_service" "api" {
+  name            = "${local.name}-api"
+  cluster         = aws_ecs_cluster.this.id
+  task_definition = aws_ecs_task_definition.api.arn
+  desired_count   = var.ecs_desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = [for subnet in aws_subnet.private : subnet.id]
+    security_groups  = [aws_security_group.ecs.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = "api"
+    container_port   = 8080
+  }
+
+  depends_on = [aws_lb_listener.http]
+}
+
 resource "aws_secretsmanager_secret" "application" {
   name = "${local.name}/application"
 }
@@ -269,19 +335,19 @@ resource "aws_db_subnet_group" "this" {
 }
 
 resource "aws_db_instance" "postgres" {
-  identifier             = local.name
-  engine                 = "postgres"
-  engine_version         = "17"
-  instance_class         = var.db_instance_class
-  allocated_storage      = 20
-  storage_type           = "gp3"
-  db_name                = var.db_name
-  username               = var.db_username
+  identifier                  = local.name
+  engine                      = "postgres"
+  engine_version              = "17"
+  instance_class              = var.db_instance_class
+  allocated_storage           = 20
+  storage_type                = "gp3"
+  db_name                     = var.db_name
+  username                    = var.db_username
   manage_master_user_password = true
-  db_subnet_group_name   = aws_db_subnet_group.this.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  publicly_accessible    = false
-  skip_final_snapshot    = true
-  deletion_protection    = var.enable_deletion_protection
-  backup_retention_period = 7
+  db_subnet_group_name        = aws_db_subnet_group.this.name
+  vpc_security_group_ids      = [aws_security_group.rds.id]
+  publicly_accessible         = false
+  skip_final_snapshot         = true
+  deletion_protection         = var.enable_deletion_protection
+  backup_retention_period     = 7
 }
