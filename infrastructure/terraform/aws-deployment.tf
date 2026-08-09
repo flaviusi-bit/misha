@@ -70,7 +70,10 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "s3:DeleteObject"
     ]
 
-    resources = ["arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate"]
+    resources = [
+      "arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate",
+      "arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate.tflock"
+    ]
   }
 
   statement {
