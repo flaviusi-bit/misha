@@ -1,0 +1,11 @@
+aws_region  = "eu-central-1"
+environment  = "dev"
+vpc_cidr     = "10.40.0.0/16"
+
+db_name              = "misha"
+db_username          = "misha"
+db_instance_class    = "db.t4g.micro"
+ecs_cpu              = 512
+ecs_memory           = 1024
+container_image      = ""
+enable_deletion_protection = false
