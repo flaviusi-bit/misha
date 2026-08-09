@@ -38,7 +38,7 @@ jobs:
 
       - name: Validate deployment role configuration
         env:
-          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          AWS_DEPLOY_ROLE_ARN: arn:aws:iam::576984879588:role/misha-dev-github-actions-deploy
         run: |
           test -n "$AWS_DEPLOY_ROLE_ARN" || {
             echo "AWS_DEPLOY_ROLE_ARN repository variable is not configured."
@@ -48,7 +48,7 @@ jobs:
       - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::576984879588:role/misha-dev-github-actions-deploy
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS identity
