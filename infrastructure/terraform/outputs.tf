@@ -57,3 +57,13 @@ output "rds_endpoint" {
 output "application_secret_arn" {
   value = aws_secretsmanager_secret.application.arn
 }
+
+output "github_actions_deploy_role_arn" {
+  description = "IAM role ARN assumed by GitHub Actions through OIDC."
+  value       = aws_iam_role.github_actions_deploy.arn
+}
+
+output "ecr_repository_url" {
+  description = "ECR repository URL for the MISHA API image."
+  value       = aws_ecr_repository.api.repository_url
+}
