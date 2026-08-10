@@ -60,7 +60,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("Sha256").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
             b.Property<long>("SizeBytes").HasColumnType("bigint");
             b.Property<string>("StorageKey").IsRequired().HasMaxLength(500).HasColumnType("character varying(500)");
-            b.Property<int>("DocumentType").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("DocumentType").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.HasKey("Id");
             b.HasIndex("ApplicationId", "CreatedAtUtc");
             b.HasIndex("Sha256");
@@ -90,7 +90,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid>("Id").HasColumnType("uuid");
             b.Property<Guid>("ApplicationId").HasColumnType("uuid");
             b.Property<string>("Provider").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)");
-            b.Property<int>("Decision").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("Decision").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<string>("MatchReference").HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<string>("ErrorMessage").HasMaxLength(1000).HasColumnType("character varying(1000)");
             b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
@@ -106,7 +106,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid>("ApplicationId").HasColumnType("uuid");
             b.Property<long>("AmountMinor").HasColumnType("bigint");
             b.Property<string>("Currency").IsRequired().HasMaxLength(3).HasColumnType("character varying(3)");
-            b.Property<int>("Status").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("Status").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<string>("Provider").HasMaxLength(100).HasColumnType("character varying(100)");
             b.Property<string>("ProviderReference").HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<string>("ActionUrl").HasMaxLength(1000).HasColumnType("character varying(1000)");
@@ -125,7 +125,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid>("ApplicationId").HasColumnType("uuid");
             b.Property<string>("EtaNumber").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<string>("VerificationTokenHash").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
-            b.Property<int>("Status").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("Status").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<DateTimeOffset>("IssuedAtUtc").HasColumnType("timestamp with time zone");
             b.Property<DateTimeOffset>("ExpiresAtUtc").HasColumnType("timestamp with time zone");
             b.Property<DateTimeOffset?>("RevokedAtUtc").HasColumnType("timestamp with time zone");
@@ -143,7 +143,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid?>("EtaId").HasColumnType("uuid");
             b.Property<Guid?>("ApplicationId").HasColumnType("uuid");
             b.Property<string>("EtaNumber").HasMaxLength(32).HasColumnType("character varying(32)");
-            b.Property<int>("EventType").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("EventType").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<string>("Outcome").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<string>("ActorReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone");
@@ -153,6 +153,47 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("EventType", "OccurredAtUtc");
             b.ToTable("eta_audits");
         });
+
+        modelBuilder.Entity("Misha.Domain.ManualReviews.ManualReviewCase", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<Guid>("ApplicationId").HasColumnType("uuid");
+            b.Property<int>("Status").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("Trigger").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)");
+            b.Property<string>("Reason").IsRequired().HasMaxLength(2000).HasColumnType("character varying(2000)");
+            b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<string>("AssignedToActorReference").HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<DateTimeOffset?>("AssignedAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<int?>("Resolution").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("ResolutionReason").HasMaxLength(2000).HasColumnType("character varying(2000)");
+            b.Property<string>("ResolvedByActorReference").HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<DateTimeOffset?>("ResolvedAtUtc").HasColumnType("timestamp with time zone");
+            b.HasKey("Id");
+            b.HasIndex("ApplicationId", "CreatedAtUtc");
+            b.HasIndex("Status", "CreatedAtUtc");
+            b.ToTable("manual_review_cases");
+        });
+
+        modelBuilder.Entity("Misha.Domain.Notifications.Notification", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<Guid>("ApplicationId").HasColumnType("uuid");
+            b.Property<string>("RecipientReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<string>("Channel").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("Template").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)");
+            b.Property<string>("Payload").IsRequired().HasColumnType("text");
+            b.Property<int>("Status").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("Attempts").HasColumnType("integer");
+            b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<DateTimeOffset?>("SentAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<DateTimeOffset?>("LastAttemptAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<string>("LastError").HasMaxLength(2000).HasColumnType("character varying(2000)");
+            b.HasKey("Id");
+            b.HasIndex("Status", "CreatedAtUtc");
+            b.HasIndex("ApplicationId", "CreatedAtUtc");
+            b.ToTable("notifications");
+        });
+
 #pragma warning restore 612, 618
     }
 }

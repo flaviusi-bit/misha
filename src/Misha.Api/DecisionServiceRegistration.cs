@@ -17,7 +17,6 @@ public static class DecisionServiceRegistration
         services.AddScoped<DecisionService>();
         services.AddScoped<ManualReviewService>();
         services.AddHostedService<DecisionAuditSchemaInitializer>();
-        services.AddHostedService<ManualReviewSchemaInitializer>();
 
         // Registered after the legacy unavailable provider so this becomes the active gateway.
         services.AddHttpClient("watchlist", client =>

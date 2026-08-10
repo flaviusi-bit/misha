@@ -9,6 +9,5 @@ public static class NotificationServiceRegistration
     {
         services.AddScoped<INotificationRepository, EfNotificationRepository>();
         services.AddScoped<NotificationService>();
-        services.AddHostedService<NotificationSchemaInitializer>();
     }
 }
