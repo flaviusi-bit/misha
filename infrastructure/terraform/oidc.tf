@@ -42,7 +42,7 @@ resource "aws_iam_role" "github_actions_deploy" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike = { "token.actions.githubusercontent.com:sub" = "repo:flaviusi-bit/misha:ref:refs/heads/main" }
+        StringLike = { "token.actions.githubusercontent.com:sub" = "repo:flaviusi-bit/misha:environment:aws-dev" }
       }
     }]
   })
@@ -58,7 +58,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
       { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"], Resource = aws_ecr_repository.api.arn },
       { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:UpdateService"], Resource = "*" },
       { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn] },
-      { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = ["arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate", "arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate.tflock"] },
+      { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = ["arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate", "arn:aws:s3:::misha/dev/terraform.tfstate.tflock"] },
       { Effect = "Allow", Action = ["s3:ListBucket"], Resource = "arn:aws:s3:::misha-terraform-state", Condition = { StringLike = { "s3:prefix" = ["misha/dev/*"] } } }
     ]
   })
