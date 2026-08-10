@@ -241,10 +241,12 @@ resource "aws_ecs_task_definition" "api" {
     image     = var.container_image != "" ? var.container_image : "public.ecr.aws/docker/library/nginx:1.27-alpine"
     essential = true
     portMappings = [{ containerPort = 8080, hostPort = 8080, protocol = "tcp" }]
+    environment = [
+      { name = "DB_HOST", value = "misha-dev.cz0uwoggwiss.eu-central-1.rds.amazonaws.com" },
+      { name = "DB_PORT", value = "5432" },
+      { name = "DB_NAME", value = var.db_name }
+    ]
     secrets = [
-      { name = "DB_HOST",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:host::" },
-      { name = "DB_PORT",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:port::" },
-      { name = "DB_NAME",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:dbname::" },
       { name = "DB_USER",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:username::" },
       { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:password::" }
     ]
