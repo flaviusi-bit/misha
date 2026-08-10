@@ -103,6 +103,12 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<MishaDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
