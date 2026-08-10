@@ -78,23 +78,27 @@ jobs:
             --task-definition "$ECS_TASK_DEFINITION" \
             --query taskDefinition > task-definition.json
 
-      - name: Inject database secrets into ECS task definition
+      - name: Inject database configuration into ECS task definition
         run: |
           jq --arg secret "$RDS_SECRET_ARN" \
              --arg host "$DB_HOST" \
              --arg port "$DB_PORT" \
              --arg dbname "$DB_NAME" \
-            '.containerDefinitions |= map(if .name == "api" then .secrets = [
-              {name:"DB_HOST", valueFrom:($host)},
-              {name:"DB_PORT", valueFrom:($port)},
-              {name:"DB_NAME", valueFrom:($dbname)},
-              {name:"DB_USER", valueFrom:($secret + ":username::")},
-              {name:"DB_PASSWORD", valueFrom:($secret + ":password::")}
-            ] else . end)' \
+            '.containerDefinitions |= map(if .name == "api" then
+              .environment = ((.environment // []) + [
+                {name:"DB_HOST", value:($host)},
+                {name:"DB_PORT", value:($port)},
+                {name:"DB_NAME", value:($dbname)}
+              ] | unique_by(.name)) |
+              .secrets = [
+                {name:"DB_USER", valueFrom:($secret + ":username::")},
+                {name:"DB_PASSWORD", valueFrom:($secret + ":password::")}
+              ]
+            else . end)' \
             task-definition.json > task-definition.with-secrets.json
 
           mv task-definition.with-secrets.json task-definition.json
-          echo "Injected database configuration and RDS credential references into ECS task definition."
+          echo "Injected non-secret database configuration as environment variables and RDS credentials as Secrets Manager references."
 
       - name: Render ECS task definition
         id: render
