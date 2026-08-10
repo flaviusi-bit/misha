@@ -22,6 +22,7 @@ env:
   ECS_SERVICE: misha-dev-api
   ECS_TASK_DEFINITION: misha-dev-api
   CONTAINER_NAME: api
+  RDS_SECRET_ARN: arn:aws:secretsmanager:eu-central-1:576984879588:secret:rds!db-6a664989-fe6c-44b0-b885-4a1af2c65c87-9cQJ00
 
 jobs:
   deploy:
@@ -76,17 +77,7 @@ jobs:
 
       - name: Inject database secrets into ECS task definition
         run: |
-          DB_SECRET_ARN=$(aws rds describe-db-instances \
-            --db-instance-identifier misha-dev \
-            --query 'DBInstances[0].MasterUserSecret.SecretArn' \
-            --output text)
-
-          test -n "$DB_SECRET_ARN" && test "$DB_SECRET_ARN" != "None" || {
-            echo "RDS managed master secret ARN was not found."
-            exit 1
-          }
-
-          jq --arg secret "$DB_SECRET_ARN" \
+          jq --arg secret "$RDS_SECRET_ARN" \
             '.containerDefinitions |= map(if .name == "api" then .secrets = [
               {name:"DB_HOST", valueFrom:($secret + ":host::")},
               {name:"DB_PORT", valueFrom:($secret + ":port::")},
