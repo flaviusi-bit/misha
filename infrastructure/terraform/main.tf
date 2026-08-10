@@ -382,6 +382,10 @@ resource "aws_ecs_service" "api" {
     container_port   = 8080
   }
   depends_on = [aws_lb_listener.http, aws_lb_listener.https]
+
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 }
 
 resource "aws_secretsmanager_secret" "application" {
