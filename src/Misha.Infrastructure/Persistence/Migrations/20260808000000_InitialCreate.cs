@@ -1,10 +1,14 @@
 using System;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Misha.Infrastructure.Persistence.Migrations;
 
+[DbContext(typeof(MishaDbContext))]
+[Migration("20260808000000_InitialCreate")]
 public partial class InitialCreate : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
@@ -85,41 +89,13 @@ public partial class InitialCreate : Migration
                 table.PrimaryKey("PK_watchlist_checks", x => x.Id);
             });
 
-        migrationBuilder.CreateIndex(
-            name: "IX_applications_ApplicantReference",
-            table: "applications",
-            column: "ApplicantReference");
-
-        migrationBuilder.CreateIndex(
-            name: "IX_applications_Status",
-            table: "applications",
-            column: "Status");
-
-        migrationBuilder.CreateIndex(
-            name: "IX_document_artifacts_ApplicationId_CreatedAtUtc",
-            table: "document_artifacts",
-            columns: new[] { "ApplicationId", "CreatedAtUtc" });
-
-        migrationBuilder.CreateIndex(
-            name: "IX_document_artifacts_Sha256",
-            table: "document_artifacts",
-            column: "Sha256");
-
-        migrationBuilder.CreateIndex(
-            name: "IX_passport_documents_ApplicationId",
-            table: "passport_documents",
-            column: "ApplicationId",
-            unique: true);
-
-        migrationBuilder.CreateIndex(
-            name: "IX_passport_documents_DocumentNumber",
-            table: "passport_documents",
-            column: "DocumentNumber");
-
-        migrationBuilder.CreateIndex(
-            name: "IX_watchlist_checks_ApplicationId_CreatedAtUtc",
-            table: "watchlist_checks",
-            columns: new[] { "ApplicationId", "CreatedAtUtc" });
+        migrationBuilder.CreateIndex(name: "IX_applications_ApplicantReference", table: "applications", column: "ApplicantReference");
+        migrationBuilder.CreateIndex(name: "IX_applications_Status", table: "applications", column: "Status");
+        migrationBuilder.CreateIndex(name: "IX_document_artifacts_ApplicationId_CreatedAtUtc", table: "document_artifacts", columns: new[] { "ApplicationId", "CreatedAtUtc" });
+        migrationBuilder.CreateIndex(name: "IX_document_artifacts_Sha256", table: "document_artifacts", column: "Sha256");
+        migrationBuilder.CreateIndex(name: "IX_passport_documents_ApplicationId", table: "passport_documents", column: "ApplicationId", unique: true);
+        migrationBuilder.CreateIndex(name: "IX_passport_documents_DocumentNumber", table: "passport_documents", column: "DocumentNumber");
+        migrationBuilder.CreateIndex(name: "IX_watchlist_checks_ApplicationId_CreatedAtUtc", table: "watchlist_checks", columns: new[] { "ApplicationId", "CreatedAtUtc" });
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
