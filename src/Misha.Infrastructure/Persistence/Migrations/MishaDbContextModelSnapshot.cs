@@ -21,6 +21,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
         modelBuilder.Entity("Misha.Domain.Applications.Application", b =>
         {
             b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<uint>("Version").IsRowVersion().HasColumnName("xmin");
             b.Property<string>("ApplicantReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
             b.Property<DateTimeOffset?>("SubmittedAtUtc").HasColumnType("timestamp with time zone");
