@@ -17,8 +17,28 @@ using Misha.Infrastructure.Watchlists;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var connectionString = builder.Configuration.GetConnectionString("Misha");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    var dbHost = builder.Configuration["DB_HOST"];
+    var dbPort = builder.Configuration["DB_PORT"] ?? "5432";
+    var dbName = builder.Configuration["DB_NAME"];
+    var dbUser = builder.Configuration["DB_USER"];
+    var dbPassword = builder.Configuration["DB_PASSWORD"];
+
+    if (string.IsNullOrWhiteSpace(dbHost) ||
+        string.IsNullOrWhiteSpace(dbName) ||
+        string.IsNullOrWhiteSpace(dbUser) ||
+        string.IsNullOrWhiteSpace(dbPassword))
+    {
+        throw new InvalidOperationException("Database configuration is missing. Expected ConnectionStrings:Misha or ECS DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD settings.");
+    }
+
+    connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword}";
+}
+
 builder.Services.AddDbContext<MishaDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Misha")));
+    options.UseNpgsql(connectionString));
 builder.Services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
 builder.Services.AddScoped<IDocumentStorage>(sp =>
     new S3DocumentStorage(
