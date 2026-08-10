@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Misha.Infrastructure.Persistence.Migrations;
 
 [DbContext(typeof(MishaDbContext))]
-[Migration("20260808000000_InitialCreate")]
 public partial class InitialCreate
 {
 }
