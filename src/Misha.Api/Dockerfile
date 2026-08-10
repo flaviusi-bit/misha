@@ -11,7 +11,7 @@ COPY ["src/Misha.Infrastructure/Misha.Infrastructure.csproj", "src/Misha.Infrast
 RUN dotnet restore "src/Misha.Api/Misha.Api.csproj"
 COPY . .
 WORKDIR "/src/src/Misha.Api"
-RUN dotnet publish "Misha.Api.csproj" -c Release -o /app/publish --no-restore
+RUN dotnet publish "Misha.Api.csproj" -c Release -o /app/publish
 
 FROM runtime AS final
 WORKDIR /app
