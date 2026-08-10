@@ -15,10 +15,6 @@ permissions:
   contents: read
   id-token: write
 
-concurrency:
-  group: aws-ecs-dev
-  cancel-in-progress: false
-
 env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY: misha-dev-api
@@ -77,6 +73,31 @@ jobs:
           aws ecs describe-task-definition \
             --task-definition "$ECS_TASK_DEFINITION" \
             --query taskDefinition > task-definition.json
+
+      - name: Inject database secrets into ECS task definition
+        run: |
+          DB_SECRET_ARN=$(aws rds describe-db-instances \
+            --db-instance-identifier misha-dev \
+            --query 'DBInstances[0].MasterUserSecret.SecretArn' \
+            --output text)
+
+          test -n "$DB_SECRET_ARN" && test "$DB_SECRET_ARN" != "None" || {
+            echo "RDS managed master secret ARN was not found."
+            exit 1
+          }
+
+          jq --arg secret "$DB_SECRET_ARN" \
+            '.containerDefinitions |= map(if .name == "api" then .secrets = [
+              {name:"DB_HOST", valueFrom:($secret + ":host::")},
+              {name:"DB_PORT", valueFrom:($secret + ":port::")},
+              {name:"DB_NAME", valueFrom:($secret + ":dbname::")},
+              {name:"DB_USER", valueFrom:($secret + ":username::")},
+              {name:"DB_PASSWORD", valueFrom:($secret + ":password::")}
+            ] else . end)' \
+            task-definition.json > task-definition.with-secrets.json
+
+          mv task-definition.with-secrets.json task-definition.json
+          echo "Injected RDS secret reference into ECS task definition."
 
       - name: Render ECS task definition
         id: render
