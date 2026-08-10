@@ -114,6 +114,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         etaAudit.Property(x => x.EventType).HasConversion<string>().HasMaxLength(32).IsRequired();
         etaAudit.Property(x => x.Outcome).HasMaxLength(32).IsRequired();
         etaAudit.Property(x => x.ActorReference).HasMaxLength(200).IsRequired();
+        etaAudit.Property(x => x.ActorReference).HasMaxLength(200).IsRequired();
         etaAudit.Property(x => x.OccurredAtUtc).IsRequired();
         etaAudit.HasIndex(x => new { x.EtaId, x.OccurredAtUtc });
         etaAudit.HasIndex(x => new { x.ApplicationId, x.OccurredAtUtc });
@@ -122,6 +123,10 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         var manualReview = modelBuilder.Entity<ManualReviewCase>();
         manualReview.ToTable("manual_review_cases");
         manualReview.HasKey(x => x.Id);
+        manualReview.HasOne<MishaApplication>()
+            .WithMany()
+            .HasForeignKey(x => x.ApplicationId)
+            .OnDelete(DeleteBehavior.Restrict);
         manualReview.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         manualReview.Property(x => x.Trigger).HasMaxLength(100).IsRequired();
         manualReview.Property(x => x.Reason).HasMaxLength(2000).IsRequired();
