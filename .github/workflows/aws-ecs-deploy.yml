@@ -23,6 +23,9 @@ env:
   ECS_TASK_DEFINITION: misha-dev-api
   CONTAINER_NAME: api
   RDS_SECRET_ARN: arn:aws:secretsmanager:eu-central-1:576984879588:secret:rds!db-6a664989-fe6c-44b0-b885-4a1af2c65c87-9cQJ00
+  DB_HOST: misha-dev.cz0uwoggwiss.eu-central-1.rds.amazonaws.com
+  DB_PORT: "5432"
+  DB_NAME: misha
 
 jobs:
   deploy:
@@ -78,17 +81,20 @@ jobs:
       - name: Inject database secrets into ECS task definition
         run: |
           jq --arg secret "$RDS_SECRET_ARN" \
+             --arg host "$DB_HOST" \
+             --arg port "$DB_PORT" \
+             --arg dbname "$DB_NAME" \
             '.containerDefinitions |= map(if .name == "api" then .secrets = [
-              {name:"DB_HOST", valueFrom:($secret + ":host::")},
-              {name:"DB_PORT", valueFrom:($secret + ":port::")},
-              {name:"DB_NAME", valueFrom:($secret + ":dbname::")},
+              {name:"DB_HOST", valueFrom:($host)},
+              {name:"DB_PORT", valueFrom:($port)},
+              {name:"DB_NAME", valueFrom:($dbname)},
               {name:"DB_USER", valueFrom:($secret + ":username::")},
               {name:"DB_PASSWORD", valueFrom:($secret + ":password::")}
             ] else . end)' \
             task-definition.json > task-definition.with-secrets.json
 
           mv task-definition.with-secrets.json task-definition.json
-          echo "Injected RDS secret reference into ECS task definition."
+          echo "Injected database configuration and RDS credential references into ECS task definition."
 
       - name: Render ECS task definition
         id: render
