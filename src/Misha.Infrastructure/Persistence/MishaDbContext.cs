@@ -114,7 +114,6 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         etaAudit.Property(x => x.EventType).HasConversion<string>().HasMaxLength(32).IsRequired();
         etaAudit.Property(x => x.Outcome).HasMaxLength(32).IsRequired();
         etaAudit.Property(x => x.ActorReference).HasMaxLength(200).IsRequired();
-        etaAudit.Property(x => x.ActorReference).HasMaxLength(200).IsRequired();
         etaAudit.Property(x => x.OccurredAtUtc).IsRequired();
         etaAudit.HasIndex(x => new { x.EtaId, x.OccurredAtUtc });
         etaAudit.HasIndex(x => new { x.ApplicationId, x.OccurredAtUtc });
