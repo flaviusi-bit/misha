@@ -35,7 +35,7 @@ resource "aws_subnet" "private" {
   for_each = { for i, az in local.azs : az => i }
   vpc_id            = aws_vpc.this.id
   availability_zone = each.key
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, each.value + 16)
+  cidr_block         = cidrsubnet(var.vpc_cidr, 8, each.value + 16)
 }
 
 resource "aws_route_table" "public" {
@@ -187,6 +187,19 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_execution_secrets" {
+  name = "${local.name}-ecs-execution-secrets"
+  role = aws_iam_role.ecs_execution.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
+      Resource = aws_db_instance.postgres.master_user_secret[0].secret_arn
+    }]
+  })
+}
+
 resource "aws_iam_role" "ecs_task" {
   name = "${local.name}-ecs-task"
   assume_role_policy = jsonencode({
@@ -228,6 +241,13 @@ resource "aws_ecs_task_definition" "api" {
     image     = var.container_image != "" ? var.container_image : "public.ecr.aws/docker/library/nginx:1.27-alpine"
     essential = true
     portMappings = [{ containerPort = 8080, hostPort = 8080, protocol = "tcp" }]
+    secrets = [
+      { name = "DB_HOST",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:host::" },
+      { name = "DB_PORT",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:port::" },
+      { name = "DB_NAME",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:dbname::" },
+      { name = "DB_USER",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:username::" },
+      { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:password::" }
+    ]
     logConfiguration = {
       logDriver = "awslogs"
       options = { awslogs-group = aws_cloudwatch_log_group.api.name, awslogs-region = var.aws_region, awslogs-stream-prefix = "api" }
