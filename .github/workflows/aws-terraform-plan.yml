@@ -42,29 +42,33 @@ jobs:
 
           ROLE_NAME="${AWS_DEPLOY_ROLE_ARN##*/}"
           POLICY_NAME="$ROLE_NAME"
-          POLICY_FILE="$(mktemp)"
+          RESPONSE_FILE="$(mktemp)"
           UPDATED_POLICY_FILE="$(mktemp)"
-          trap 'rm -f "$POLICY_FILE" "$UPDATED_POLICY_FILE"' EXIT
+          trap 'rm -f "$RESPONSE_FILE" "$UPDATED_POLICY_FILE"' EXIT
 
           echo "Reading current inline policy: $POLICY_NAME"
           aws iam get-role-policy \
             --role-name "$ROLE_NAME" \
             --policy-name "$POLICY_NAME" \
-            --query 'PolicyDocument' \
-            --output text > "$POLICY_FILE"
+            --output json > "$RESPONSE_FILE"
 
-          python3 - "$POLICY_FILE" "$UPDATED_POLICY_FILE" <<'PY'
+          python3 - "$RESPONSE_FILE" "$UPDATED_POLICY_FILE" <<'PY'
           import json
           import sys
           import urllib.parse
 
           source, destination = sys.argv[1:]
-          raw = open(source, encoding="utf-8").read().strip()
+          response = json.load(open(source, encoding="utf-8"))
+          raw_policy = response["PolicyDocument"]
 
-          if raw.startswith("%7B") or raw.startswith("%7b"):
-              raw = urllib.parse.unquote(raw)
+          if isinstance(raw_policy, str):
+              raw_policy = urllib.parse.unquote(raw_policy)
+              policy = json.loads(raw_policy)
+          elif isinstance(raw_policy, dict):
+              policy = raw_policy
+          else:
+              raise TypeError(f"Unexpected PolicyDocument type: {type(raw_policy).__name__}")
 
-          policy = json.loads(raw)
           statements = policy.setdefault("Statement", [])
           if isinstance(statements, dict):
               statements = [statements]
