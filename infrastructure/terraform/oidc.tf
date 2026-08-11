@@ -212,8 +212,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "route53:ListHostedZonesByName"
       ], Resource = "*" },
 
-      # IAM is required because this Terraform stack manages the ECS roles,
-      # the GitHub OIDC provider and the GitHub deployment role itself.
+      # IAM role management for the ECS roles and GitHub deployment role.
       { Effect = "Allow", Action = [
         "iam:GetRole",
         "iam:CreateRole",
@@ -233,9 +232,10 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         aws_iam_role.ecs_execution.arn,
         aws_iam_role.ecs_task.arn
       ] },
+      # OIDC provider creation is account-scoped; read/update/delete are provider-scoped.
+      { Effect = "Allow", Action = ["iam:CreateOpenIDConnectProvider"], Resource = "*" },
       { Effect = "Allow", Action = [
         "iam:GetOpenIDConnectProvider",
-        "iam:CreateOpenIDConnectProvider",
         "iam:DeleteOpenIDConnectProvider",
         "iam:AddClientIDToOpenIDConnectProvider",
         "iam:RemoveClientIDFromOpenIDConnectProvider",
