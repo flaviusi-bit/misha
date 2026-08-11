@@ -14,7 +14,7 @@ public static class ManualReviewEndpoints
         {
             var cases = await service.GetOpenAsync(ct);
             return Results.Ok(cases.Select(ToResponse));
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ReviewRead);
 
         app.MapGet("/admin/manual-reviews/{id:guid}", async (
             Guid id,
@@ -29,7 +29,7 @@ public static class ManualReviewEndpoints
             {
                 return Results.NotFound(new { error = ex.Message });
             }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ReviewRead);
 
         app.MapPost("/admin/manual-reviews/{id:guid}/assign", async (
             Guid id,
@@ -56,7 +56,7 @@ public static class ManualReviewEndpoints
             {
                 return Results.Conflict(new { error = ex.Message });
             }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ReviewWrite);
 
         app.MapPost("/admin/manual-reviews/{id:guid}/resolve", async (
             Guid id,
@@ -84,7 +84,7 @@ public static class ManualReviewEndpoints
             {
                 return Results.Conflict(new { error = ex.Message });
             }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ReviewWrite);
     }
 
     private static string GetActor(ClaimsPrincipal user) =>

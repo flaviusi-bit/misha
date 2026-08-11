@@ -91,15 +91,19 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+var cognitoAuthority = builder.Configuration["Authentication:Authority"];
+var cognitoAudience = builder.Configuration["Authentication:Audience"];
+var cognitoApiIdentifier = builder.Configuration["Authentication:ApiIdentifier"] ?? "https://misha-api";
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = builder.Configuration["Authentication:Authority"];
-        options.Audience = builder.Configuration["Authentication:Audience"];
+        options.Authority = cognitoAuthority;
+        options.Audience = cognitoAudience;
         options.RequireHttpsMetadata = true;
     });
-builder.Services.AddAuthorization();
+AuthorizationPolicies.Add(builder.Services, cognitoApiIdentifier);
 
 var app = builder.Build();
 
@@ -125,7 +129,7 @@ app.MapPost("/applications", async (CreateApplicationRequest request, Applicatio
 {
     var id = await service.CreateAsync(request.ApplicantReference, ct);
     return Results.Created($"/applications/{id}", new { id });
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service, CancellationToken ct) =>
 {
@@ -143,32 +147,32 @@ app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service
             application.DecidedAtUtc,
             application.CancelledAtUtc,
             application.RefusalReason));
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
 app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization();
+    await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapPost("/applications/{id:guid}/process", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization();
+    await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization();
+    await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.MapPost("/applications/{id:guid}/refuse", async (
     Guid id,
     RefuseApplicationRequest request,
     ApplicationService service,
     CancellationToken ct) =>
-    await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization();
+    await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization();
+    await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) =>
 {
     var documents = await service.GetAsync(id, ct);
     return Results.Ok(documents.Select(ToDocumentResponse));
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
 app.MapPost("/applications/{id:guid}/documents", async (
     Guid id,
@@ -183,7 +187,7 @@ app.MapPost("/applications/{id:guid}/documents", async (
     }
     catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapPost("/applications/{id:guid}/documents/upload", async (
     Guid id,
@@ -200,19 +204,19 @@ app.MapPost("/applications/{id:guid}/documents/upload", async (
     }
     catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
-}).DisableAntiforgery().RequireAuthorization();
+}).DisableAntiforgery().RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapPost("/applications/{id:guid}/passport", async (Guid id, PassportRequest request, PassportService service, CancellationToken ct) =>
 {
     await service.CreateAsync(id, request.DocumentNumber, request.IssuingCountry, request.Surname, request.GivenNames, request.DateOfBirth, request.Nationality, request.ExpiryDate, ct);
     return Results.NoContent();
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapGet("/applications/{id:guid}/passport", async (Guid id, PassportService service, CancellationToken ct) =>
 {
     var passport = await service.GetAsync(id, ct);
     return passport is null ? Results.NotFound() : Results.Ok(new PassportResponse(passport.Id, passport.ApplicationId, passport.DocumentNumber, passport.IssuingCountry, passport.Surname, passport.GivenNames, passport.DateOfBirth, passport.Nationality, passport.ExpiryDate, passport.IsExpired(DateOnly.FromDateTime(DateTime.UtcNow))));
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
 app.MapPost("/applications/{id:guid}/passport/verify", async (Guid id, PassportVerificationService service, CancellationToken ct) =>
 {
@@ -222,19 +226,19 @@ app.MapPost("/applications/{id:guid}/passport/verify", async (Guid id, PassportV
         return Results.Ok(new PassportVerificationResponse(result.Decision.ToString(), result.Reference, result.ErrorMessage));
     }
     catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.MapPost("/applications/{id:guid}/watchlist/screen", async (Guid id, WatchlistService service, CancellationToken ct) =>
 {
     var check = await service.ScreenAsync(id, ct);
     return Results.Ok(new WatchlistResponse(check.Id, check.ApplicationId, check.Provider, check.Decision.ToString(), check.MatchReference, check.ErrorMessage, check.CheckedAtUtc));
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService service, CancellationToken ct) =>
 {
     var check = await service.GetLatestAsync(id, ct);
     return check is null ? Results.NotFound() : Results.Ok(new WatchlistResponse(check.Id, check.ApplicationId, check.Provider, check.Decision.ToString(), check.MatchReference, check.ErrorMessage, check.CheckedAtUtc));
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.DecisionRead);
 
 app.MapPost("/applications/{id:guid}/policy/evaluate", async (Guid id, PolicyService service, CancellationToken ct) =>
 {
@@ -244,7 +248,7 @@ app.MapPost("/applications/{id:guid}/policy/evaluate", async (Guid id, PolicySer
         return Results.Ok(new PolicyEvaluationResponse(evaluation.Decision.ToString(), evaluation.Reasons));
     }
     catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
-}).RequireAuthorization();
+}).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.Run();
 

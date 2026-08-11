@@ -70,6 +70,34 @@ resource "aws_cognito_resource_server" "api" {
   }
 }
 
+resource "aws_cognito_user_group" "admin" {
+  name         = "misha-admin"
+  user_pool_id = aws_cognito_user_pool.misha.id
+  precedence   = 1
+  description  = "Full MISHA administrative access."
+}
+
+resource "aws_cognito_user_group" "operator" {
+  name         = "misha-operator"
+  user_pool_id = aws_cognito_user_pool.misha.id
+  precedence   = 10
+  description  = "Operational access to application processing and decisions."
+}
+
+resource "aws_cognito_user_group" "reviewer" {
+  name         = "misha-reviewer"
+  user_pool_id = aws_cognito_user_pool.misha.id
+  precedence   = 20
+  description  = "Manual-review queue access."
+}
+
+resource "aws_cognito_user_group" "auditor" {
+  name         = "misha-auditor"
+  user_pool_id = aws_cognito_user_pool.misha.id
+  precedence   = 30
+  description  = "Read-only operational and audit access."
+}
+
 resource "aws_cognito_user_pool_client" "misha" {
   name         = "misha-${var.environment}-web"
   user_pool_id = aws_cognito_user_pool.misha.id
