@@ -1,6 +1,8 @@
 name: AWS Terraform Plan
 
 on:
+  push:
+    branches: [fix/terraform-deploy-iam]
   workflow_dispatch:
 
 permissions:
