@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using Misha.Application.Applications;
 using Misha.Domain.Documents;
 
@@ -11,7 +10,7 @@ public sealed class DocumentService(
     IDocumentStorage storage)
 {
     private const long MaxDocumentSizeBytes = 25 * 1024 * 1024;
-    private const string Sha256Pattern = "^[0-9a-fA-F]{64}$";
+    private const int CopyBufferSize = 64 * 1024;
 
     public async Task<DocumentArtifact> UploadAsync(
         Guid applicationId,
@@ -36,7 +35,7 @@ public sealed class DocumentService(
             throw new ArgumentException("Document exceeds the 25 MB upload limit.", nameof(content));
 
         await using var buffer = new MemoryStream(capacity: (int)Math.Min(MaxDocumentSizeBytes, 1024 * 1024));
-        var copyBuffer = new byte[64 * 1024];
+        var copyBuffer = new byte[CopyBufferSize];
         long totalBytes = 0;
 
         while (true)
@@ -55,12 +54,12 @@ public sealed class DocumentService(
         if (totalBytes <= 0)
             throw new ArgumentException("Document content is empty.", nameof(content));
 
-        var bytes = buffer.GetBuffer().AsSpan(0, checked((int)buffer.Length));
+        var bytes = buffer.ToArray();
         var sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         var storageKey = BuildStorageKey(applicationId, documentType, fileName);
 
         buffer.Position = 0;
-        await storage.UploadAsync(storageKey, buffer, contentType, cancellationToken);
+        await storage.UploadAsync(storageKey, buffer, contentType.Trim(), cancellationToken);
 
         try
         {
@@ -69,7 +68,7 @@ public sealed class DocumentService(
                 documentType,
                 fileName.Trim(),
                 contentType.Trim(),
-                bytes.Length,
+                bytes.LongLength,
                 sha256,
                 storageKey);
 
@@ -110,9 +109,10 @@ public sealed class DocumentService(
         if (sizeBytes is <= 0 or > MaxDocumentSizeBytes)
             throw new ArgumentException("Document size must be between 1 byte and 25 MB.", nameof(sizeBytes));
 
-        if (!Regex.IsMatch(sha256 ?? string.Empty, Sha256Pattern, RegexOptions.CultureInvariant))
+        if (!IsValidSha256(sha256))
             throw new ArgumentException("Document SHA-256 must be a 64-character hexadecimal value.", nameof(sha256));
 
+        var normalizedSha256 = sha256.ToLowerInvariant();
         var expectedPrefix = $"applications/{applicationId:D}/documents/";
         if (string.IsNullOrWhiteSpace(storageKey) || !storageKey.StartsWith(expectedPrefix, StringComparison.Ordinal))
             throw new ArgumentException("Document storage key must belong to the target application.", nameof(storageKey));
@@ -123,7 +123,7 @@ public sealed class DocumentService(
             fileName.Trim(),
             contentType.Trim(),
             sizeBytes,
-            sha256.ToLowerInvariant(),
+            normalizedSha256,
             storageKey);
 
         await documents.AddAsync(document, cancellationToken);
@@ -147,6 +147,9 @@ public sealed class DocumentService(
         if (string.IsNullOrWhiteSpace(contentType) || contentType.Length > 127 || contentType.Contains('\r') || contentType.Contains('\n'))
             throw new ArgumentException("A valid content type is required.", nameof(contentType));
     }
+
+    private static bool IsValidSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
     private static string BuildStorageKey(Guid applicationId, DocumentType documentType, string fileName)
     {
