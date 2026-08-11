@@ -242,7 +242,7 @@ resource "aws_ecs_task_definition" "api" {
     essential = true
     portMappings = [{ containerPort = 8080, hostPort = 8080, protocol = "tcp" }]
     environment = [
-      { name = "DB_HOST", value = "misha-dev.cz0uwoggwiss.eu-central-1.rds.amazonaws.com" },
+      { name = "DB_HOST", value = aws_db_instance.postgres.address },
       { name = "DB_PORT", value = "5432" },
       { name = "DB_NAME", value = var.db_name }
     ]
