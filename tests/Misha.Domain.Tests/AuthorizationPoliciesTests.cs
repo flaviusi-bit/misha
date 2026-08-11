@@ -11,6 +11,42 @@ public sealed class AuthorizationPoliciesTests
     private const string ApiIdentifier = "https://misha-api";
 
     [Fact]
+    public async Task ApiWrite_Allows_Admin_And_Operator()
+    {
+        var authorization = BuildAuthorization();
+
+        var admin = await authorization.AuthorizeAsync(User("misha-admin", "write"), null, AuthorizationPolicies.ApiWrite);
+        var operatorUser = await authorization.AuthorizeAsync(User("misha-operator", "write"), null, AuthorizationPolicies.ApiWrite);
+
+        Assert.True(admin.Succeeded);
+        Assert.True(operatorUser.Succeeded);
+    }
+
+    [Fact]
+    public async Task ApiWrite_Denies_Reviewer_And_Auditor()
+    {
+        var authorization = BuildAuthorization();
+
+        var reviewer = await authorization.AuthorizeAsync(User("misha-reviewer", "write"), null, AuthorizationPolicies.ApiWrite);
+        var auditor = await authorization.AuthorizeAsync(User("misha-auditor", "write"), null, AuthorizationPolicies.ApiWrite);
+
+        Assert.False(reviewer.Succeeded);
+        Assert.False(auditor.Succeeded);
+    }
+
+    [Fact]
+    public async Task ApiRead_Allows_All_Operational_Roles()
+    {
+        var authorization = BuildAuthorization();
+
+        foreach (var group in new[] { "misha-admin", "misha-operator", "misha-reviewer", "misha-auditor" })
+        {
+            var result = await authorization.AuthorizeAsync(User(group, "read"), null, AuthorizationPolicies.ApiRead);
+            Assert.True(result.Succeeded, $"Expected {group} to read API resources.");
+        }
+    }
+
+    [Fact]
     public async Task DecisionWrite_Allows_Admin_And_Operator()
     {
         var authorization = BuildAuthorization();
@@ -59,11 +95,31 @@ public sealed class AuthorizationPoliciesTests
     }
 
     [Fact]
+    public async Task ReviewRead_Denies_Operator()
+    {
+        var authorization = BuildAuthorization();
+
+        var result = await authorization.AuthorizeAsync(User("misha-operator", "review.read"), null, AuthorizationPolicies.ReviewRead);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
     public async Task Policy_Denies_MissingScope()
     {
         var authorization = BuildAuthorization();
 
         var result = await authorization.AuthorizeAsync(User("misha-admin"), null, AuthorizationPolicies.DecisionWrite);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task Policy_Denies_UnknownGroup_EvenWithScope()
+    {
+        var authorization = BuildAuthorization();
+
+        var result = await authorization.AuthorizeAsync(User("misha-unknown", "write"), null, AuthorizationPolicies.ApiWrite);
 
         Assert.False(result.Succeeded);
     }

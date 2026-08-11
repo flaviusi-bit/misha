@@ -14,29 +14,39 @@ public static class AuthorizationPolicies
     private const string ScopeClaim = "scope";
     private const string GroupClaim = "cognito:groups";
 
+    private static readonly string[] ReadGroups =
+    ["misha-admin", "misha-operator", "misha-reviewer", "misha-auditor"];
+
+    private static readonly string[] WriteGroups =
+    ["misha-admin", "misha-operator"];
+
     public static void Add(IServiceCollection services, string apiIdentifier)
     {
         services.AddAuthorization(options =>
         {
             options.AddPolicy(ApiRead, policy =>
                 policy.RequireAuthenticatedUser()
-                    .RequireAssertion(context => HasScope(context.User, apiIdentifier, "read")));
+                    .RequireAssertion(context =>
+                        HasScope(context.User, apiIdentifier, "read") &&
+                        IsInAnyGroup(context.User, ReadGroups)));
 
             options.AddPolicy(ApiWrite, policy =>
                 policy.RequireAuthenticatedUser()
-                    .RequireAssertion(context => HasScope(context.User, apiIdentifier, "write")));
+                    .RequireAssertion(context =>
+                        HasScope(context.User, apiIdentifier, "write") &&
+                        IsInAnyGroup(context.User, WriteGroups)));
 
             options.AddPolicy(DecisionRead, policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireAssertion(context =>
                         HasScope(context.User, apiIdentifier, "decision.read") &&
-                        IsInAnyGroup(context.User, "misha-admin", "misha-operator", "misha-reviewer", "misha-auditor")));
+                        IsInAnyGroup(context.User, ReadGroups)));
 
             options.AddPolicy(DecisionWrite, policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireAssertion(context =>
                         HasScope(context.User, apiIdentifier, "decision.write") &&
-                        IsInAnyGroup(context.User, "misha-admin", "misha-operator")));
+                        IsInAnyGroup(context.User, WriteGroups)));
 
             options.AddPolicy(ReviewRead, policy =>
                 policy.RequireAuthenticatedUser()

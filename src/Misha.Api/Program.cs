@@ -1,6 +1,7 @@
 using System.Threading.RateLimiting;
 using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Misha.Api;
@@ -95,14 +96,45 @@ var cognitoAuthority = builder.Configuration["Authentication:Authority"];
 var cognitoAudience = builder.Configuration["Authentication:Audience"];
 var cognitoApiIdentifier = builder.Configuration["Authentication:ApiIdentifier"] ?? "https://misha-api";
 
+if (string.IsNullOrWhiteSpace(cognitoAuthority))
+{
+    throw new InvalidOperationException("Authentication:Authority is required.");
+}
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.Authority = cognitoAuthority;
-        options.Audience = cognitoAudience;
         options.RequireHttpsMetadata = true;
+
+        // Cognito access tokens are the API credential. They carry `scope` and
+        // `client_id`, while the ID token carries the OIDC `aud` claim. Do not
+        // accept an ID token as an API bearer token by accident.
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            NameClaimType = "username",
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var tokenUse = context.Principal?.FindFirst("token_use")?.Value;
+                if (!string.Equals(tokenUse, "access", StringComparison.Ordinal))
+                {
+                    context.Fail("Only Cognito access tokens may be used to call the API.");
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
+
 AuthorizationPolicies.Add(builder.Services, cognitoApiIdentifier);
 
 var app = builder.Build();
