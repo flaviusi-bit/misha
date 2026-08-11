@@ -34,6 +34,89 @@ jobs:
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
+      - name: Bootstrap S3 bucket read permissions
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+
+          ROLE_NAME="${AWS_DEPLOY_ROLE_ARN##*/}"
+          POLICY_NAME="$ROLE_NAME"
+          POLICY_FILE="$(mktemp)"
+          UPDATED_POLICY_FILE="$(mktemp)"
+          trap 'rm -f "$POLICY_FILE" "$UPDATED_POLICY_FILE"' EXIT
+
+          echo "Reading current inline policy: $POLICY_NAME"
+          aws iam get-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --query 'PolicyDocument' \
+            --output text > "$POLICY_FILE"
+
+          python3 - "$POLICY_FILE" "$UPDATED_POLICY_FILE" <<'PY'
+          import json
+          import sys
+          import urllib.parse
+
+          source, destination = sys.argv[1:]
+          raw = open(source, encoding="utf-8").read().strip()
+
+          if raw.startswith("%7B") or raw.startswith("%7b"):
+              raw = urllib.parse.unquote(raw)
+
+          policy = json.loads(raw)
+          statements = policy.setdefault("Statement", [])
+          if isinstance(statements, dict):
+              statements = [statements]
+              policy["Statement"] = statements
+
+          required_actions = [
+              "s3:GetAccelerateConfiguration",
+              "s3:GetLifecycleConfiguration",
+          ]
+          target_resource = "arn:aws:s3:::misha-dev-documents-*"
+
+          target = None
+          for statement in statements:
+              resource = statement.get("Resource")
+              resources = resource if isinstance(resource, list) else [resource]
+              if target_resource in resources:
+                  target = statement
+                  break
+
+          if target is None:
+              target = {
+                  "Effect": "Allow",
+                  "Action": [],
+                  "Resource": target_resource,
+              }
+              statements.append(target)
+
+          actions = target.get("Action", [])
+          if isinstance(actions, str):
+              actions = [actions]
+          actions = list(actions)
+
+          for action in required_actions:
+              if action not in actions:
+                  actions.append(action)
+
+          target["Action"] = actions
+          policy.setdefault("Version", "2012-10-17")
+
+          with open(destination, "w", encoding="utf-8") as handle:
+              json.dump(policy, handle, separators=(",", ":"))
+              handle.write("\n")
+          PY
+
+          echo "Ensuring Terraform's S3 refresh permissions exist on the deployment role"
+          aws iam put-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --policy-document "file://$UPDATED_POLICY_FILE"
+
+          echo "S3 bootstrap permissions are in place."
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
