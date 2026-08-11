@@ -90,12 +90,13 @@ jobs:
               "s3:GetBucketObjectLockConfiguration",
               "s3:GetBucketPolicy",
               "s3:GetBucketPolicyStatus",
-              "s3:GetBucketReplication",
+              "s3:GetBucketPublicAccessBlock",
               "s3:GetBucketRequestPayment",
               "s3:GetBucketTagging",
               "s3:GetBucketVersioning",
               "s3:GetBucketWebsite",
               "s3:GetLifecycleConfiguration",
+              "s3:GetReplicationConfiguration",
           ]
           target_resource = "arn:aws:s3:::misha-dev-documents-*"
 
