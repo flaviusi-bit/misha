@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Misha.Api;
+using Xunit;
 
 namespace Misha.Domain.Tests;
 
