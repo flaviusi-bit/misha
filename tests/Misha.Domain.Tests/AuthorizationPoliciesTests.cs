@@ -71,6 +71,7 @@ public sealed class AuthorizationPoliciesTests
     private static IAuthorizationService BuildAuthorization()
     {
         var services = new ServiceCollection();
+        services.AddLogging();
         AuthorizationPolicies.Add(services, ApiIdentifier);
         return services.BuildServiceProvider().GetRequiredService<IAuthorizationService>();
     }
