@@ -88,3 +88,9 @@ variable "cognito_logout_urls" {
   description = "OAuth2 logout callback URLs for the MISHA web client."
   default     = ["http://localhost:3000/"]
 }
+
+variable "cognito_api_identifier" {
+  type        = string
+  description = "URL-form resource identifier used to bind Cognito access tokens to the MISHA API."
+  default     = "https://misha-api"
+}
