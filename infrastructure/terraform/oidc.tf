@@ -66,7 +66,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ecr:GetLifecyclePolicy",
         "ecr:InitiateLayerUpload",
         "ecr:ListTagsForResource",
-        "ecr:PutEncryptionConfiguration",
         "ecr:PutImage",
         "ecr:PutImageScanningConfiguration",
         "ecr:PutImageTagMutability",
@@ -143,6 +142,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "s3:CreateBucket",
         "s3:DeleteBucket",
         "s3:GetBucket*",
+        "s3:GetAccelerateConfiguration",
         "s3:ListBucket",
         "s3:PutBucket*",
         "s3:DeleteBucketPolicy"
