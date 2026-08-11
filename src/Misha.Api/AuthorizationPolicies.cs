@@ -13,49 +13,48 @@ public static class AuthorizationPolicies
 
     private const string ScopeClaim = "scope";
     private const string GroupClaim = "cognito:groups";
-    private const string ApiIdentifier = "https://misha-api";
 
-    public static void Add(IServiceCollection services)
+    public static void Add(IServiceCollection services, string apiIdentifier)
     {
         services.AddAuthorization(options =>
         {
             options.AddPolicy(ApiRead, policy =>
                 policy.RequireAuthenticatedUser()
-                    .RequireAssertion(context => HasScope(context.User, "read")));
+                    .RequireAssertion(context => HasScope(context.User, apiIdentifier, "read")));
 
             options.AddPolicy(ApiWrite, policy =>
                 policy.RequireAuthenticatedUser()
-                    .RequireAssertion(context => HasScope(context.User, "write")));
+                    .RequireAssertion(context => HasScope(context.User, apiIdentifier, "write")));
 
             options.AddPolicy(DecisionRead, policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireAssertion(context =>
-                        HasScope(context.User, "decision.read") &&
+                        HasScope(context.User, apiIdentifier, "decision.read") &&
                         IsInAnyGroup(context.User, "misha-admin", "misha-operator", "misha-reviewer", "misha-auditor")));
 
             options.AddPolicy(DecisionWrite, policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireAssertion(context =>
-                        HasScope(context.User, "decision.write") &&
+                        HasScope(context.User, apiIdentifier, "decision.write") &&
                         IsInAnyGroup(context.User, "misha-admin", "misha-operator")));
 
             options.AddPolicy(ReviewRead, policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireAssertion(context =>
-                        HasScope(context.User, "review.read") &&
+                        HasScope(context.User, apiIdentifier, "review.read") &&
                         IsInAnyGroup(context.User, "misha-admin", "misha-reviewer", "misha-auditor")));
 
             options.AddPolicy(ReviewWrite, policy =>
                 policy.RequireAuthenticatedUser()
                     .RequireAssertion(context =>
-                        HasScope(context.User, "review.write") &&
+                        HasScope(context.User, apiIdentifier, "review.write") &&
                         IsInAnyGroup(context.User, "misha-admin", "misha-reviewer")));
         });
     }
 
-    private static bool HasScope(ClaimsPrincipal user, string scope)
+    private static bool HasScope(ClaimsPrincipal user, string apiIdentifier, string scope)
     {
-        var expected = $"{ApiIdentifier}/{scope}";
+        var expected = $"{apiIdentifier.TrimEnd('/')}/{scope}";
         return user.FindAll(ScopeClaim)
             .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Any(value => string.Equals(value, expected, StringComparison.Ordinal));
