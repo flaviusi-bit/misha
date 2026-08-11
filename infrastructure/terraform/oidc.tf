@@ -42,7 +42,7 @@ resource "aws_iam_role" "github_actions_deploy" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike = { "token.actions.githubusercontent.com:sub" = "repo:flaviusi-bit/misha:environment:aws-dev" }
+        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:flaviusi-bit/misha:environment:aws-dev" }
       }
     }]
   })
@@ -55,12 +55,200 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
     Version = "2012-10-17"
     Statement = [
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
-      { Effect = "Allow", Action = ["ecr:DescribeRepositories"], Resource = aws_ecr_repository.api.arn },
-      { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"], Resource = aws_ecr_repository.api.arn },
-      { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:UpdateService"], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:CompleteLayerUpload",
+        "ecr:CreateRepository",
+        "ecr:DeleteRepository",
+        "ecr:DeleteLifecyclePolicy",
+        "ecr:DescribeRepositories",
+        "ecr:GetLifecyclePolicy",
+        "ecr:InitiateLayerUpload",
+        "ecr:ListTagsForResource",
+        "ecr:PutImage",
+        "ecr:PutImageScanningConfiguration",
+        "ecr:PutImageTagMutability",
+        "ecr:PutLifecyclePolicy",
+        "ecr:TagResource",
+        "ecr:UntagResource",
+        "ecr:UploadLayerPart"
+      ], Resource = aws_ecr_repository.api.arn },
+      { Effect = "Allow", Action = [
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:RegisterTaskDefinition",
+        "ecs:DeregisterTaskDefinition",
+        "ecs:CreateCluster",
+        "ecs:DeleteCluster",
+        "ecs:UpdateClusterSettings",
+        "ecs:TagResource",
+        "ecs:UntagResource",
+        "ecs:CreateService",
+        "ecs:DeleteService",
+        "ecs:UpdateService"
+      ], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "ec2:Describe*",
+        "ec2:CreateVpc",
+        "ec2:DeleteVpc",
+        "ec2:ModifyVpcAttribute",
+        "ec2:CreateInternetGateway",
+        "ec2:DeleteInternetGateway",
+        "ec2:AttachInternetGateway",
+        "ec2:DetachInternetGateway",
+        "ec2:CreateSubnet",
+        "ec2:DeleteSubnet",
+        "ec2:ModifySubnetAttribute",
+        "ec2:CreateRouteTable",
+        "ec2:DeleteRouteTable",
+        "ec2:CreateRoute",
+        "ec2:ReplaceRoute",
+        "ec2:DeleteRoute",
+        "ec2:AssociateRouteTable",
+        "ec2:DisassociateRouteTable",
+        "ec2:AllocateAddress",
+        "ec2:ReleaseAddress",
+        "ec2:CreateNatGateway",
+        "ec2:DeleteNatGateway",
+        "ec2:CreateSecurityGroup",
+        "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ], Resource = [
+        "arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate",
+        "arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate.tflock"
+      ] },
+      { Effect = "Allow", Action = ["s3:ListBucket"], Resource = "arn:aws:s3:::misha-terraform-state", Condition = { StringLike = { "s3:prefix" = ["misha/dev/*"] } } },
+      { Effect = "Allow", Action = [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:GetBucket*",
+        "s3:GetAccelerateConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetReplicationConfiguration",
+        "s3:GetEncryptionConfiguration",
+        "s3:ListBucket",
+        "s3:PutBucket*",
+        "s3:DeleteBucketPolicy"
+      ], Resource = "arn:aws:s3:::misha-dev-documents-*" },
+      { Effect = "Allow", Action = [
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ListQueueTags",
+        "sqs:CreateQueue",
+        "sqs:DeleteQueue",
+        "sqs:SetQueueAttributes",
+        "sqs:TagQueue",
+        "sqs:UntagQueue"
+      ], Resource = [
+        "arn:aws:sqs:eu-central-1:576984879588:misha-dev-application-events",
+        "arn:aws:sqs:eu-central-1:576984879588:misha-dev-application-events-dlq"
+      ] },
+      { Effect = "Allow", Action = ["logs:DescribeLogGroups"], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "logs:ListTagsForResource",
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:PutRetentionPolicy",
+        "logs:DeleteRetentionPolicy",
+        "logs:TagResource",
+        "logs:UntagResource"
+      ], Resource = "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/api" },
+      { Effect = "Allow", Action = [
+        "rds:Describe*",
+        "rds:ListTagsForResource",
+        "rds:CreateDBSubnetGroup",
+        "rds:DeleteDBSubnetGroup",
+        "rds:ModifyDBSubnetGroup",
+        "rds:CreateDBInstance",
+        "rds:DeleteDBInstance",
+        "rds:ModifyDBInstance",
+        "rds:AddTagsToResource",
+        "rds:RemoveTagsFromResource"
+      ], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetResourcePolicy",
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:PutResourcePolicy",
+        "secretsmanager:DeleteResourcePolicy",
+        "secretsmanager:TagResource",
+        "secretsmanager:UntagResource"
+      ], Resource = "arn:aws:secretsmanager:eu-central-1:576984879588:secret:misha-dev/*" },
+      { Effect = "Allow", Action = [
+        "acm:DescribeCertificate",
+        "acm:RequestCertificate",
+        "acm:DeleteCertificate",
+        "acm:ListCertificates",
+        "acm:ListTagsForCertificate",
+        "acm:AddTagsToCertificate",
+        "acm:RemoveTagsFromCertificate"
+      ], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "route53:GetHostedZone",
+        "route53:ListResourceRecordSets",
+        "route53:ChangeResourceRecordSets",
+        "route53:ListHostedZonesByName",
+        "route53:GetChange"
+      ], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "iam:GetRole",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:TagRole",
+        "iam:UntagRole"
+      ], Resource = [
+        aws_iam_role.github_actions_deploy.arn,
+        aws_iam_role.ecs_execution.arn,
+        aws_iam_role.ecs_task.arn
+      ] },
+      { Effect = "Allow", Action = ["iam:CreateOpenIDConnectProvider"], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "iam:GetOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:RemoveClientIDFromOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint"
+      ], Resource = aws_iam_openid_connect_provider.github_actions.arn },
       { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn] },
-      { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = ["arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate", "arn:aws:s3:::misha/dev/terraform.tfstate.tflock"] },
-      { Effect = "Allow", Action = ["s3:ListBucket"], Resource = "arn:aws:s3:::misha-terraform-state", Condition = { StringLike = { "s3:prefix" = ["misha/dev/*"] } } }
+      { Effect = "Allow", Action = [
+        "elasticloadbalancing:Describe*",
+        "elasticloadbalancing:CreateLoadBalancer",
+        "elasticloadbalancing:DeleteLoadBalancer",
+        "elasticloadbalancing:ModifyLoadBalancerAttributes",
+        "elasticloadbalancing:SetSecurityGroups",
+        "elasticloadbalancing:AddTags",
+        "elasticloadbalancing:RemoveTags",
+        "elasticloadbalancing:CreateTargetGroup",
+        "elasticloadbalancing:DeleteTargetGroup",
+        "elasticloadbalancing:ModifyTargetGroup",
+        "elasticloadbalancing:ModifyTargetGroupAttributes",
+        "elasticloadbalancing:RegisterTargets",
+        "elasticloadbalancing:DeregisterTargets",
+        "elasticloadbalancing:CreateListener",
+        "elasticloadbalancing:DeleteListener",
+        "elasticloadbalancing:ModifyListener"
+      ], Resource = "*" }
     ]
   })
 }

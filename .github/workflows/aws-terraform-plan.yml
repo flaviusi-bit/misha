@@ -1,6 +1,8 @@
 name: AWS Terraform Plan
 
 on:
+  push:
+    branches: [fix/terraform-deploy-iam]
   workflow_dispatch:
 
 permissions:
@@ -33,6 +35,154 @@ jobs:
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
+
+      - name: Bootstrap S3 bucket read permissions
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+
+          ROLE_NAME="${AWS_DEPLOY_ROLE_ARN##*/}"
+          POLICY_NAME="$ROLE_NAME"
+          RESPONSE_FILE="$(mktemp)"
+          UPDATED_POLICY_FILE="$(mktemp)"
+          trap 'rm -f "$RESPONSE_FILE" "$UPDATED_POLICY_FILE"' EXIT
+
+          echo "Reading current inline policy: $POLICY_NAME"
+          aws iam get-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --output json > "$RESPONSE_FILE"
+
+          python3 - "$RESPONSE_FILE" "$UPDATED_POLICY_FILE" <<'PY'
+          import json
+          import sys
+          import urllib.parse
+
+          source, destination = sys.argv[1:]
+          with open(source, encoding="utf-8") as handle:
+              response = json.load(handle)
+
+          raw_policy = response["PolicyDocument"]
+          if isinstance(raw_policy, str):
+              policy = json.loads(urllib.parse.unquote(raw_policy))
+          elif isinstance(raw_policy, dict):
+              policy = raw_policy
+          else:
+              raise TypeError(f"Unexpected PolicyDocument type: {type(raw_policy).__name__}")
+
+          statements = policy.setdefault("Statement", [])
+          if isinstance(statements, dict):
+              statements = [statements]
+              policy["Statement"] = statements
+
+          required_actions = [
+              "s3:GetAccelerateConfiguration",
+              "s3:GetLifecycleConfiguration",
+              "s3:GetReplicationConfiguration",
+              "s3:GetEncryptionConfiguration",
+          ]
+          target_resource = "arn:aws:s3:::misha-dev-documents-*"
+
+          target = None
+          for statement in statements:
+              resource = statement.get("Resource")
+              resources = resource if isinstance(resource, list) else [resource]
+              if target_resource in resources:
+                  target = statement
+                  break
+
+          if target is None:
+              target = {
+                  "Effect": "Allow",
+                  "Action": [],
+                  "Resource": target_resource,
+              }
+              statements.append(target)
+
+          actions = target.get("Action", [])
+          if isinstance(actions, str):
+              actions = [actions]
+          actions = list(actions)
+
+          for action in required_actions:
+              if action not in actions:
+                  actions.append(action)
+
+          target["Action"] = actions
+          policy.setdefault("Version", "2012-10-17")
+
+          with open(destination, "w", encoding="utf-8") as handle:
+              json.dump(policy, handle, separators=(",", ":"))
+              handle.write("\n")
+          PY
+
+          echo "Updating deployment role policy"
+          aws iam put-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --policy-document "file://$UPDATED_POLICY_FILE"
+
+          echo "Deployment role policy updated."
+
+      - name: Re-assume deployment role after IAM policy update
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubActionsTerraformPlan
+
+      - name: Verify S3 bucket permissions
+        env:
+          DOCUMENTS_BUCKET: misha-dev-documents-20260809165426329100000001
+        run: |
+          set -euo pipefail
+
+          echo "Verifying S3 bucket permissions with a fresh role session..."
+
+          for attempt in $(seq 1 15); do
+            denied=0
+
+            accelerate_output="$(aws s3api get-bucket-accelerate-configuration --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
+            lifecycle_output="$(aws s3api get-bucket-lifecycle-configuration --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
+            replication_output="$(aws s3api get-bucket-replication --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
+            encryption_output="$(aws s3api get-bucket-encryption --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
+
+            if grep -q "AccessDenied\|not authorized" <<<"$accelerate_output"; then
+              echo "S3 accelerate permission is not effective yet."
+              denied=1
+            fi
+
+            if grep -q "AccessDenied\|not authorized" <<<"$lifecycle_output"; then
+              echo "S3 lifecycle permission is not effective yet."
+              denied=1
+            fi
+
+            if grep -q "AccessDenied\|not authorized" <<<"$replication_output"; then
+              echo "S3 replication permission is not effective yet."
+              denied=1
+            fi
+
+            if grep -q "AccessDenied\|not authorized" <<<"$encryption_output"; then
+              echo "S3 encryption permission is not effective yet."
+              denied=1
+            fi
+
+            if [[ "$denied" -eq 0 ]]; then
+              echo "All required S3 bucket permissions are effective."
+              exit 0
+            fi
+
+            echo "Waiting for IAM propagation: attempt $attempt/15..."
+            sleep 2
+          done
+
+          echo "S3 permissions are still denied after 30 seconds."
+          echo "Accelerate: $accelerate_output"
+          echo "Lifecycle: $lifecycle_output"
+          echo "Replication: $replication_output"
+          echo "Encryption: $encryption_output"
+          exit 1
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
