@@ -76,3 +76,15 @@ variable "enable_deletion_protection" {
   description = "Protect production databases from accidental deletion."
   default     = false
 }
+
+variable "cognito_callback_urls" {
+  type        = list(string)
+  description = "OAuth2 authorization-code callback URLs for the MISHA web client."
+  default     = ["http://localhost:3000/callback"]
+}
+
+variable "cognito_logout_urls" {
+  type        = list(string)
+  description = "OAuth2 logout callback URLs for the MISHA web client."
+  default     = ["http://localhost:3000/"]
+}
