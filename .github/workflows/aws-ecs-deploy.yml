@@ -26,10 +26,6 @@ env:
   ECS_SERVICE: misha-dev-api
   ECS_TASK_DEFINITION: misha-dev-api
   CONTAINER_NAME: api
-  RDS_SECRET_ARN: arn:aws:secretsmanager:eu-central-1:576984879588:secret:rds!db-6a664989-fe6c-44b0-b885-4a1af2c65c87-9cQJ00
-  DB_HOST: misha-dev.cz0uwoggwiss.eu-central-1.rds.amazonaws.com
-  DB_PORT: "5432"
-  DB_NAME: misha
 
 jobs:
   deploy:
@@ -42,7 +38,7 @@ jobs:
 
       - name: Validate deployment role configuration
         env:
-          AWS_DEPLOY_ROLE_ARN: arn:aws:iam::576984879588:role/misha-dev-github-actions-deploy
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
           test -n "$AWS_DEPLOY_ROLE_ARN" || {
             echo "AWS_DEPLOY_ROLE_ARN repository variable is not configured."
@@ -52,8 +48,9 @@ jobs:
       - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::576984879588:role/misha-dev-github-actions-deploy
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActionsECSDeploy
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
@@ -81,28 +78,6 @@ jobs:
           aws ecs describe-task-definition \
             --task-definition "$ECS_TASK_DEFINITION" \
             --query taskDefinition > task-definition.json
-
-      - name: Inject database configuration into ECS task definition
-        run: |
-          jq --arg secret "$RDS_SECRET_ARN" \
-             --arg host "$DB_HOST" \
-             --arg port "$DB_PORT" \
-             --arg dbname "$DB_NAME" \
-            '.containerDefinitions |= map(if .name == "api" then
-              .environment = ((.environment // []) + [
-                {name:"DB_HOST", value:($host)},
-                {name:"DB_PORT", value:($port)},
-                {name:"DB_NAME", value:($dbname)}
-              ] | unique_by(.name)) |
-              .secrets = [
-                {name:"DB_USER", valueFrom:($secret + ":username::")},
-                {name:"DB_PASSWORD", valueFrom:($secret + ":password::")}
-              ]
-            else . end)' \
-            task-definition.json > task-definition.with-secrets.json
-
-          mv task-definition.with-secrets.json task-definition.json
-          echo "Injected non-secret database configuration as environment variables and RDS credentials as Secrets Manager references."
 
       - name: Render ECS task definition
         id: render
