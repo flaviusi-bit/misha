@@ -8,9 +8,6 @@ on:
       - '.github/workflows/aws-terraform-plan.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'infrastructure/terraform/**'
-      - '.github/workflows/aws-terraform-plan.yml'
   workflow_dispatch:
 
 permissions:
