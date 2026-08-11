@@ -145,6 +145,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     await db.Database.MigrateAsync();
 }
 
+app.UseSecurityHeaders();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
