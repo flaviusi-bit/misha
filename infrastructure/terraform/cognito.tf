@@ -35,7 +35,7 @@ resource "aws_cognito_user_pool_domain" "misha" {
 }
 
 resource "aws_cognito_resource_server" "api" {
-  identifier   = "misha-api"
+  identifier   = var.cognito_api_identifier
   name         = "MISHA API"
   user_pool_id = aws_cognito_user_pool.misha.id
 
@@ -81,12 +81,12 @@ resource "aws_cognito_user_pool_client" "misha" {
   allowed_oauth_scopes = [
     "openid",
     "email",
-    "misha-api/read",
-    "misha-api/write",
-    "misha-api/decision.read",
-    "misha-api/decision.write",
-    "misha-api/review.read",
-    "misha-api/review.write",
+    "${var.cognito_api_identifier}/read",
+    "${var.cognito_api_identifier}/write",
+    "${var.cognito_api_identifier}/decision.read",
+    "${var.cognito_api_identifier}/decision.write",
+    "${var.cognito_api_identifier}/review.read",
+    "${var.cognito_api_identifier}/review.write",
   ]
 
   callback_urls = var.cognito_callback_urls
@@ -100,4 +100,20 @@ resource "aws_cognito_user_pool_client" "misha" {
   ]
 
   prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation        = true
+
+  access_token_validity  = 60
+  id_token_validity      = 60
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "minutes"
+    id_token      = "minutes"
+    refresh_token = "days"
+  }
+
+  refresh_token_rotation {
+    feature                    = "ENABLED"
+    retry_grace_period_seconds = 30
+  }
 }
