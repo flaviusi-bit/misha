@@ -54,7 +54,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # ECR: repository lifecycle, image publishing and configuration.
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       { Effect = "Allow", Action = [
         "ecr:BatchCheckLayerAvailability",
@@ -74,8 +73,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ecr:UntagResource",
         "ecr:UploadLayerPart"
       ], Resource = aws_ecr_repository.api.arn },
-
-      # ECS: Terraform manages the cluster, task definition and service.
       { Effect = "Allow", Action = [
         "ecs:DescribeClusters",
         "ecs:DescribeServices",
@@ -91,8 +88,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ecs:DeleteService",
         "ecs:UpdateService"
       ], Resource = "*" },
-
-      # EC2/VPC/NAT/security groups. EC2 Describe APIs require Resource="*".
       { Effect = "Allow", Action = [
         "ec2:Describe*",
         "ec2:CreateVpc",
@@ -125,8 +120,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ec2:CreateTags",
         "ec2:DeleteTags"
       ], Resource = "*" },
-
-      # S3 Terraform state backend.
       { Effect = "Allow", Action = [
         "s3:GetObject",
         "s3:PutObject",
@@ -136,19 +129,16 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate.tflock"
       ] },
       { Effect = "Allow", Action = ["s3:ListBucket"], Resource = "arn:aws:s3:::misha-terraform-state", Condition = { StringLike = { "s3:prefix" = ["misha/dev/*"] } } },
-
-      # S3 documents bucket managed by Terraform.
       { Effect = "Allow", Action = [
         "s3:CreateBucket",
         "s3:DeleteBucket",
         "s3:GetBucket*",
         "s3:GetAccelerateConfiguration",
+        "s3:GetLifecycleConfiguration",
         "s3:ListBucket",
         "s3:PutBucket*",
         "s3:DeleteBucketPolicy"
       ], Resource = "arn:aws:s3:::misha-dev-documents-*" },
-
-      # SQS application queues.
       { Effect = "Allow", Action = [
         "sqs:GetQueueAttributes",
         "sqs:GetQueueUrl",
@@ -162,8 +152,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "arn:aws:sqs:eu-central-1:576984879588:misha-dev-application-events",
         "arn:aws:sqs:eu-central-1:576984879588:misha-dev-application-events-dlq"
       ] },
-
-      # CloudWatch Logs: DescribeLogGroups is account-level and must use Resource="*".
       { Effect = "Allow", Action = ["logs:DescribeLogGroups"], Resource = "*" },
       { Effect = "Allow", Action = [
         "logs:ListTagsForResource",
@@ -174,8 +162,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "logs:TagResource",
         "logs:UntagResource"
       ], Resource = "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/api" },
-
-      # RDS PostgreSQL instance and subnet group.
       { Effect = "Allow", Action = [
         "rds:Describe*",
         "rds:ListTagsForResource",
@@ -188,8 +174,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "rds:AddTagsToResource",
         "rds:RemoveTagsFromResource"
       ], Resource = "*" },
-
-      # Secrets Manager application secret and RDS-managed master secret metadata.
       { Effect = "Allow", Action = [
         "secretsmanager:DescribeSecret",
         "secretsmanager:GetResourcePolicy",
@@ -201,8 +185,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "secretsmanager:TagResource",
         "secretsmanager:UntagResource"
       ], Resource = "arn:aws:secretsmanager:eu-central-1:576984879588:secret:misha-dev/*" },
-
-      # ACM and Route53 are only used when domain_name + route53_zone_id are configured.
       { Effect = "Allow", Action = [
         "acm:DescribeCertificate",
         "acm:RequestCertificate",
@@ -219,8 +201,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "route53:ListHostedZonesByName",
         "route53:GetChange"
       ], Resource = "*" },
-
-      # IAM role management for the ECS roles and GitHub deployment role.
       { Effect = "Allow", Action = [
         "iam:GetRole",
         "iam:CreateRole",
@@ -240,7 +220,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         aws_iam_role.ecs_execution.arn,
         aws_iam_role.ecs_task.arn
       ] },
-      # OIDC provider creation is account-scoped; read/update/delete are provider-scoped.
       { Effect = "Allow", Action = ["iam:CreateOpenIDConnectProvider"], Resource = "*" },
       { Effect = "Allow", Action = [
         "iam:GetOpenIDConnectProvider",
@@ -250,8 +229,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "iam:UpdateOpenIDConnectProviderThumbprint"
       ], Resource = aws_iam_openid_connect_provider.github_actions.arn },
       { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn] },
-
-      # ELBv2: Terraform manages the public application load balancer, target group and listeners.
       { Effect = "Allow", Action = [
         "elasticloadbalancing:Describe*",
         "elasticloadbalancing:CreateLoadBalancer",
