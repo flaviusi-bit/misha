@@ -58,24 +58,41 @@ jobs:
           import urllib.parse
 
           source, destination = sys.argv[1:]
-          response = json.load(open(source, encoding="utf-8"))
+          with open(source, encoding="utf-8") as handle:
+              response = json.load(handle)
+
           raw_policy = response["PolicyDocument"]
 
           if isinstance(raw_policy, str):
-              raw_policy = urllib.parse.unquote(raw_policy)
-              policy = json.loads(raw_policy)
+              policy = json.loads(urllib.parse.unquote(raw_policy))
           elif isinstance(raw_policy, dict):
               policy = raw_policy
           else:
-              raise TypeError(f"Unexpected PolicyDocument type: {type(raw_policy).__name__}")
+              raise TypeError(
+                  f"Unexpected PolicyDocument type: {type(raw_policy).__name__}"
+              )
 
           statements = policy.setdefault("Statement", [])
           if isinstance(statements, dict):
               statements = [statements]
               policy["Statement"] = statements
 
+          # Terraform's aws_s3_bucket resource refreshes these bucket-level
+          # configuration APIs. Keep the bootstrap narrowly scoped to reads.
           required_actions = [
               "s3:GetAccelerateConfiguration",
+              "s3:GetBucketAcl",
+              "s3:GetBucketCORS",
+              "s3:GetBucketLocation",
+              "s3:GetBucketLogging",
+              "s3:GetBucketObjectLockConfiguration",
+              "s3:GetBucketPolicy",
+              "s3:GetBucketPolicyStatus",
+              "s3:GetBucketReplication",
+              "s3:GetBucketRequestPayment",
+              "s3:GetBucketTagging",
+              "s3:GetBucketVersioning",
+              "s3:GetBucketWebsite",
               "s3:GetLifecycleConfiguration",
           ]
           target_resource = "arn:aws:s3:::misha-dev-documents-*"
