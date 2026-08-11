@@ -42,24 +42,23 @@ jobs:
 
       - name: Validate deployment role configuration
         env:
-          AWS_DEPLOY_ROLE_ARN: arn:aws:iam::576984879588:role/misha-dev-github-actions-deploy
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
           test -n "$AWS_DEPLOY_ROLE_ARN" || {
-            echo "AWS_DEPLOY_ROLE_ARN repository variable is not configured."
+            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
             exit 1
           }
 
       - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::576984879588:role/misha-dev-github-actions-deploy
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
-        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Resolve ECR registry
