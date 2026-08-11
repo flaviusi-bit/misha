@@ -79,22 +79,11 @@ jobs:
               statements = [statements]
               policy["Statement"] = statements
 
-          # Terraform's aws_s3_bucket resource refreshes these bucket-level
-          # configuration APIs. Keep the bootstrap narrowly scoped to reads.
+          # GetBucket* covers the normal bucket-level reads. These three
+          # actions have names that do not start with GetBucket and therefore
+          # must be granted explicitly for aws_s3_bucket refresh.
           required_actions = [
               "s3:GetAccelerateConfiguration",
-              "s3:GetBucketAcl",
-              "s3:GetBucketCORS",
-              "s3:GetBucketLocation",
-              "s3:GetBucketLogging",
-              "s3:GetBucketObjectLockConfiguration",
-              "s3:GetBucketPolicy",
-              "s3:GetBucketPolicyStatus",
-              "s3:GetBucketPublicAccessBlock",
-              "s3:GetBucketRequestPayment",
-              "s3:GetBucketTagging",
-              "s3:GetBucketVersioning",
-              "s3:GetBucketWebsite",
               "s3:GetLifecycleConfiguration",
               "s3:GetReplicationConfiguration",
           ]
