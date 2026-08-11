@@ -55,6 +55,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
     Version = "2012-10-17"
     Statement = [
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
+      { Effect = "Allow", Action = ["ecr:DescribeRepositories"], Resource = aws_ecr_repository.api.arn },
       { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability", "ecr:CompleteLayerUpload", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart"], Resource = aws_ecr_repository.api.arn },
       { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition", "ecs:UpdateService"], Resource = "*" },
       { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn] },
