@@ -39,7 +39,6 @@ jobs:
       - name: Bootstrap S3 bucket read permissions
         env:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          DOCUMENTS_BUCKET: misha-dev-documents-20260809165426329100000001
         run: |
           set -euo pipefail
 
@@ -123,36 +122,59 @@ jobs:
             --policy-name "$POLICY_NAME" \
             --policy-document "file://$UPDATED_POLICY_FILE"
 
-          echo "Waiting for IAM policy propagation to S3..."
-          for attempt in $(seq 1 30); do
+          echo "Deployment role policy updated."
+
+      - name: Re-assume deployment role after IAM policy update
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubActionsTerraformPlan
+
+      - name: Verify S3 bucket permissions
+        env:
+          DOCUMENTS_BUCKET: misha-dev-documents-20260809165426329100000001
+        run: |
+          set -euo pipefail
+
+          echo "Verifying S3 bucket permissions with a fresh role session..."
+
+          for attempt in $(seq 1 15); do
+            denied=0
+
             accelerate_output="$(aws s3api get-bucket-accelerate-configuration --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
             lifecycle_output="$(aws s3api get-bucket-lifecycle-configuration --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
             replication_output="$(aws s3api get-bucket-replication --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
 
-            accelerate_denied=false
-            lifecycle_denied=false
-            replication_denied=false
-
-            grep -q "AccessDenied\|not authorized" <<<"$accelerate_output" && accelerate_denied=true
-            grep -q "AccessDenied\|not authorized" <<<"$lifecycle_output" && lifecycle_denied=true
-            grep -q "AccessDenied\|not authorized" <<<"$replication_output" && replication_denied=true
-
-            if [[ "$accelerate_denied" == false && "$lifecycle_denied" == false && "$replication_denied" == false ]]; then
-              echo "All required S3 permissions are effective."
-              break
+            if grep -q "AccessDenied\|not authorized" <<<"$accelerate_output"; then
+              echo "S3 accelerate permission is not effective yet."
+              denied=1
             fi
 
-            if [[ "$attempt" == 30 ]]; then
-              echo "Timed out waiting for IAM propagation."
-              echo "Accelerate: $accelerate_output"
-              echo "Lifecycle: $lifecycle_output"
-              echo "Replication: $replication_output"
-              exit 1
+            if grep -q "AccessDenied\|not authorized" <<<"$lifecycle_output"; then
+              echo "S3 lifecycle permission is not effective yet."
+              denied=1
             fi
 
-            echo "IAM propagation attempt $attempt/30; waiting 2 seconds..."
+            if grep -q "AccessDenied\|not authorized" <<<"$replication_output"; then
+              echo "S3 replication permission is not effective yet."
+              denied=1
+            fi
+
+            if [[ "$denied" -eq 0 ]]; then
+              echo "All required S3 bucket permissions are effective."
+              exit 0
+            fi
+
+            echo "Waiting for IAM propagation: attempt $attempt/15..."
             sleep 2
           done
+
+          echo "S3 permissions are still denied after 30 seconds."
+          echo "Accelerate: $accelerate_output"
+          echo "Lifecycle: $lifecycle_output"
+          echo "Replication: $replication_output"
+          exit 1
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
