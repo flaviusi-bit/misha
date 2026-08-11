@@ -80,6 +80,7 @@ jobs:
               "s3:GetAccelerateConfiguration",
               "s3:GetLifecycleConfiguration",
               "s3:GetReplicationConfiguration",
+              "s3:GetEncryptionConfiguration",
           ]
           target_resource = "arn:aws:s3:::misha-dev-documents-*"
 
@@ -145,6 +146,7 @@ jobs:
             accelerate_output="$(aws s3api get-bucket-accelerate-configuration --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
             lifecycle_output="$(aws s3api get-bucket-lifecycle-configuration --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
             replication_output="$(aws s3api get-bucket-replication --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
+            encryption_output="$(aws s3api get-bucket-encryption --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
 
             if grep -q "AccessDenied\|not authorized" <<<"$accelerate_output"; then
               echo "S3 accelerate permission is not effective yet."
@@ -161,6 +163,11 @@ jobs:
               denied=1
             fi
 
+            if grep -q "AccessDenied\|not authorized" <<<"$encryption_output"; then
+              echo "S3 encryption permission is not effective yet."
+              denied=1
+            fi
+
             if [[ "$denied" -eq 0 ]]; then
               echo "All required S3 bucket permissions are effective."
               exit 0
@@ -174,6 +181,7 @@ jobs:
           echo "Accelerate: $accelerate_output"
           echo "Lifecycle: $lifecycle_output"
           echo "Replication: $replication_output"
+          echo "Encryption: $encryption_output"
           exit 1
 
       - name: Setup Terraform
