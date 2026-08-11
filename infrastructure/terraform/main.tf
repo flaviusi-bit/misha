@@ -244,7 +244,9 @@ resource "aws_ecs_task_definition" "api" {
     environment = [
       { name = "DB_HOST", value = "misha-dev.cz0uwoggwiss.eu-central-1.rds.amazonaws.com" },
       { name = "DB_PORT", value = "5432" },
-      { name = "DB_NAME", value = var.db_name }
+      { name = "DB_NAME", value = var.db_name },
+      { name = "Authentication__Authority", value = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.misha.id}" },
+      { name = "Authentication__Audience", value = aws_cognito_resource_server.api.identifier }
     ]
     secrets = [
       { name = "DB_USER",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:username::" },
