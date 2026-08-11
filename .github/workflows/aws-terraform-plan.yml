@@ -39,6 +39,7 @@ jobs:
       - name: Bootstrap S3 bucket read permissions
         env:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          DOCUMENTS_BUCKET: misha-dev-documents-20260809165426329100000001
         run: |
           set -euo pipefail
 
@@ -64,24 +65,18 @@ jobs:
               response = json.load(handle)
 
           raw_policy = response["PolicyDocument"]
-
           if isinstance(raw_policy, str):
               policy = json.loads(urllib.parse.unquote(raw_policy))
           elif isinstance(raw_policy, dict):
               policy = raw_policy
           else:
-              raise TypeError(
-                  f"Unexpected PolicyDocument type: {type(raw_policy).__name__}"
-              )
+              raise TypeError(f"Unexpected PolicyDocument type: {type(raw_policy).__name__}")
 
           statements = policy.setdefault("Statement", [])
           if isinstance(statements, dict):
               statements = [statements]
               policy["Statement"] = statements
 
-          # GetBucket* covers the normal bucket-level reads. These three
-          # actions have names that do not start with GetBucket and therefore
-          # must be granted explicitly for aws_s3_bucket refresh.
           required_actions = [
               "s3:GetAccelerateConfiguration",
               "s3:GetLifecycleConfiguration",
@@ -122,13 +117,42 @@ jobs:
               handle.write("\n")
           PY
 
-          echo "Ensuring Terraform's S3 refresh permissions exist on the deployment role"
+          echo "Updating deployment role policy"
           aws iam put-role-policy \
             --role-name "$ROLE_NAME" \
             --policy-name "$POLICY_NAME" \
             --policy-document "file://$UPDATED_POLICY_FILE"
 
-          echo "S3 bootstrap permissions are in place."
+          echo "Waiting for IAM policy propagation to S3..."
+          for attempt in $(seq 1 30); do
+            accelerate_output="$(aws s3api get-bucket-accelerate-configuration --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
+            lifecycle_output="$(aws s3api get-bucket-lifecycle-configuration --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
+            replication_output="$(aws s3api get-bucket-replication --bucket "$DOCUMENTS_BUCKET" 2>&1 || true)"
+
+            accelerate_denied=false
+            lifecycle_denied=false
+            replication_denied=false
+
+            grep -q "AccessDenied\|not authorized" <<<"$accelerate_output" && accelerate_denied=true
+            grep -q "AccessDenied\|not authorized" <<<"$lifecycle_output" && lifecycle_denied=true
+            grep -q "AccessDenied\|not authorized" <<<"$replication_output" && replication_denied=true
+
+            if [[ "$accelerate_denied" == false && "$lifecycle_denied" == false && "$replication_denied" == false ]]; then
+              echo "All required S3 permissions are effective."
+              break
+            fi
+
+            if [[ "$attempt" == 30 ]]; then
+              echo "Timed out waiting for IAM propagation."
+              echo "Accelerate: $accelerate_output"
+              echo "Lifecycle: $lifecycle_output"
+              echo "Replication: $replication_output"
+              exit 1
+            fi
+
+            echo "IAM propagation attempt $attempt/30; waiting 2 seconds..."
+            sleep 2
+          done
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
