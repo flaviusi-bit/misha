@@ -1,0 +1,90 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection;
+using Misha.Api;
+using Xunit;
+
+namespace Misha.Domain.Tests;
+
+public sealed class AuthorizationPoliciesTests
+{
+    private const string ApiIdentifier = "https://misha-api";
+
+    [Fact]
+    public async Task DecisionWrite_Allows_Admin_And_Operator()
+    {
+        var authorization = BuildAuthorization();
+
+        var admin = await authorization.AuthorizeAsync(User("misha-admin", "decision.write"), null, AuthorizationPolicies.DecisionWrite);
+        var operatorUser = await authorization.AuthorizeAsync(User("misha-operator", "decision.write"), null, AuthorizationPolicies.DecisionWrite);
+
+        Assert.True(admin.Succeeded);
+        Assert.True(operatorUser.Succeeded);
+    }
+
+    [Fact]
+    public async Task DecisionWrite_Denies_Reviewer_And_Auditor()
+    {
+        var authorization = BuildAuthorization();
+
+        var reviewer = await authorization.AuthorizeAsync(User("misha-reviewer", "decision.write"), null, AuthorizationPolicies.DecisionWrite);
+        var auditor = await authorization.AuthorizeAsync(User("misha-auditor", "decision.write"), null, AuthorizationPolicies.DecisionWrite);
+
+        Assert.False(reviewer.Succeeded);
+        Assert.False(auditor.Succeeded);
+    }
+
+    [Fact]
+    public async Task ReviewWrite_Allows_Reviewer_But_Denies_Auditor()
+    {
+        var authorization = BuildAuthorization();
+
+        var reviewer = await authorization.AuthorizeAsync(User("misha-reviewer", "review.write"), null, AuthorizationPolicies.ReviewWrite);
+        var auditor = await authorization.AuthorizeAsync(User("misha-auditor", "review.write"), null, AuthorizationPolicies.ReviewWrite);
+
+        Assert.True(reviewer.Succeeded);
+        Assert.False(auditor.Succeeded);
+    }
+
+    [Fact]
+    public async Task DecisionRead_Allows_All_Operational_Roles()
+    {
+        var authorization = BuildAuthorization();
+
+        foreach (var group in new[] { "misha-admin", "misha-operator", "misha-reviewer", "misha-auditor" })
+        {
+            var result = await authorization.AuthorizeAsync(User(group, "decision.read"), null, AuthorizationPolicies.DecisionRead);
+            Assert.True(result.Succeeded, $"Expected {group} to read decisions.");
+        }
+    }
+
+    [Fact]
+    public async Task Policy_Denies_MissingScope()
+    {
+        var authorization = BuildAuthorization();
+
+        var result = await authorization.AuthorizeAsync(User("misha-admin"), null, AuthorizationPolicies.DecisionWrite);
+
+        Assert.False(result.Succeeded);
+    }
+
+    private static IAuthorizationService BuildAuthorization()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        AuthorizationPolicies.Add(services, ApiIdentifier);
+        return services.BuildServiceProvider().GetRequiredService<IAuthorizationService>();
+    }
+
+    private static ClaimsPrincipal User(string group, params string[] scopes)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, "test-user"),
+            new("cognito:groups", group),
+            new("scope", string.Join(' ', scopes.Select(scope => $"{ApiIdentifier}/{scope}")))
+        };
+
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+    }
+}
