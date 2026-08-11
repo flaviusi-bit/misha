@@ -24,7 +24,7 @@ resource "aws_internet_gateway" "this" {
 }
 
 resource "aws_subnet" "public" {
-  for_each = { for i, az in local.azs : az => i }
+  for_each                = { for i, az in local.azs : az => i }
   vpc_id                  = aws_vpc.this.id
   availability_zone       = each.key
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, each.value)
@@ -32,10 +32,10 @@ resource "aws_subnet" "public" {
 }
 
 resource "aws_subnet" "private" {
-  for_each = { for i, az in local.azs : az => i }
+  for_each          = { for i, az in local.azs : az => i }
   vpc_id            = aws_vpc.this.id
   availability_zone = each.key
-  cidr_block         = cidrsubnet(var.vpc_cidr, 8, each.value + 16)
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, each.value + 16)
 }
 
 resource "aws_route_table" "public" {
@@ -47,7 +47,7 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  for_each = aws_subnet.public
+  for_each       = aws_subnet.public
   subnet_id      = each.value.id
   route_table_id = aws_route_table.public.id
 }
@@ -71,7 +71,7 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "private" {
-  for_each = aws_subnet.private
+  for_each       = aws_subnet.private
   subnet_id      = each.value.id
   route_table_id = aws_route_table.private.id
 }
@@ -132,7 +132,7 @@ resource "aws_s3_bucket" "documents" {
 }
 
 resource "aws_s3_bucket_public_access_block" "documents" {
-  bucket = aws_s3_bucket.documents.id
+  bucket                  = aws_s3_bucket.documents.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -177,7 +177,7 @@ resource "aws_cloudwatch_log_group" "api" {
 resource "aws_iam_role" "ecs_execution" {
   name = "${local.name}-ecs-execution"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }
@@ -203,7 +203,7 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
 resource "aws_iam_role" "ecs_task" {
   name = "${local.name}-ecs-task"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
 }
@@ -237,9 +237,9 @@ resource "aws_ecs_task_definition" "api" {
   execution_role_arn       = aws_iam_role.ecs_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
   container_definitions = jsonencode([{
-    name      = "api"
-    image     = var.container_image != "" ? var.container_image : "public.ecr.aws/docker/library/nginx:1.27-alpine"
-    essential = true
+    name         = "api"
+    image        = var.container_image != "" ? var.container_image : "public.ecr.aws/docker/library/nginx:1.27-alpine"
+    essential    = true
     portMappings = [{ containerPort = 8080, hostPort = 8080, protocol = "tcp" }]
     environment = [
       { name = "DB_HOST", value = aws_db_instance.postgres.address },
@@ -249,12 +249,12 @@ resource "aws_ecs_task_definition" "api" {
       { name = "Authentication__Audience", value = aws_cognito_resource_server.api.identifier }
     ]
     secrets = [
-      { name = "DB_USER",     valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:username::" },
+      { name = "DB_USER", valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:username::" },
       { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:password::" }
     ]
     logConfiguration = {
       logDriver = "awslogs"
-      options = { awslogs-group = aws_cloudwatch_log_group.api.name, awslogs-region = var.aws_region, awslogs-stream-prefix = "api" }
+      options   = { awslogs-group = aws_cloudwatch_log_group.api.name, awslogs-region = var.aws_region, awslogs-stream-prefix = "api" }
     }
   }])
 }

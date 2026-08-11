@@ -77,7 +77,7 @@ resource "aws_cognito_user_pool_client" "misha" {
   generate_secret = false
 
   allowed_oauth_flows_user_pool_client = true
-  allowed_oauth_flows                   = ["code"]
+  allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes = [
     "openid",
     "email",
@@ -100,7 +100,7 @@ resource "aws_cognito_user_pool_client" "misha" {
   ]
 
   prevent_user_existence_errors = "ENABLED"
-  enable_token_revocation        = true
+  enable_token_revocation       = true
 
   access_token_validity  = 60
   id_token_validity      = 60
