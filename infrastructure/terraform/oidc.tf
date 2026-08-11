@@ -55,9 +55,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
     Version = "2012-10-17"
     Statement = [
       # ECR: image publishing and repository/lifecycle inspection.
-      { Effect = "Allow", Action = [
-        "ecr:GetAuthorizationToken"
-      ], Resource = "*" },
+      { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       { Effect = "Allow", Action = [
         "ecr:BatchCheckLayerAvailability",
         "ecr:CompleteLayerUpload",
@@ -158,9 +156,9 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "arn:aws:sqs:eu-central-1:576984879588:misha-dev-application-events-dlq"
       ] },
 
-      # CloudWatch Logs API log group.
+      # CloudWatch Logs: DescribeLogGroups is account-level and must use Resource="*".
+      { Effect = "Allow", Action = ["logs:DescribeLogGroups"], Resource = "*" },
       { Effect = "Allow", Action = [
-        "logs:DescribeLogGroups",
         "logs:ListTagsForResource",
         "logs:CreateLogGroup",
         "logs:DeleteLogGroup",
@@ -168,7 +166,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "logs:DeleteRetentionPolicy",
         "logs:TagResource",
         "logs:UntagResource"
-      ], Resource = "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/*" },
+      ], Resource = "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/api" },
 
       # RDS PostgreSQL instance and subnet group.
       { Effect = "Allow", Action = [
@@ -241,9 +239,27 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "iam:RemoveClientIDFromOpenIDConnectProvider",
         "iam:UpdateOpenIDConnectProviderThumbprint"
       ], Resource = aws_iam_openid_connect_provider.github_actions.arn },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn] },
+
+      # ELBv2: Terraform manages the public application load balancer, target group and listeners.
       { Effect = "Allow", Action = [
-        "iam:PassRole"
-      ], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn] }
+        "elasticloadbalancing:Describe*",
+        "elasticloadbalancing:CreateLoadBalancer",
+        "elasticloadbalancing:DeleteLoadBalancer",
+        "elasticloadbalancing:ModifyLoadBalancerAttributes",
+        "elasticloadbalancing:SetSecurityGroups",
+        "elasticloadbalancing:AddTags",
+        "elasticloadbalancing:RemoveTags",
+        "elasticloadbalancing:CreateTargetGroup",
+        "elasticloadbalancing:DeleteTargetGroup",
+        "elasticloadbalancing:ModifyTargetGroup",
+        "elasticloadbalancing:ModifyTargetGroupAttributes",
+        "elasticloadbalancing:RegisterTargets",
+        "elasticloadbalancing:DeregisterTargets",
+        "elasticloadbalancing:CreateListener",
+        "elasticloadbalancing:DeleteListener",
+        "elasticloadbalancing:ModifyListener"
+      ], Resource = "*" }
     ]
   })
 }
