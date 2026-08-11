@@ -9,7 +9,7 @@ public sealed class S3DocumentStorageTests
     [Fact]
     public async Task UploadAsync_rejects_empty_storage_key_before_network_call()
     {
-        await using var client = CreateClient();
+        using var client = CreateClient();
         var storage = new S3DocumentStorage(client, "misha-test-documents");
         await using var content = new MemoryStream([1, 2, 3]);
 
@@ -22,7 +22,7 @@ public sealed class S3DocumentStorageTests
     [Fact]
     public async Task UploadAsync_rejects_path_traversal_key_before_network_call()
     {
-        await using var client = CreateClient();
+        using var client = CreateClient();
         var storage = new S3DocumentStorage(client, "misha-test-documents");
         await using var content = new MemoryStream([1, 2, 3]);
 
@@ -35,7 +35,7 @@ public sealed class S3DocumentStorageTests
     [Fact]
     public async Task UploadAsync_rejects_header_injection_content_type_before_network_call()
     {
-        await using var client = CreateClient();
+        using var client = CreateClient();
         var storage = new S3DocumentStorage(client, "misha-test-documents");
         await using var content = new MemoryStream([1, 2, 3]);
 
@@ -48,7 +48,7 @@ public sealed class S3DocumentStorageTests
     [Fact]
     public async Task UploadAsync_rejects_missing_bucket_configuration_before_network_call()
     {
-        await using var client = CreateClient();
+        using var client = CreateClient();
         var storage = new S3DocumentStorage(client, "");
         await using var content = new MemoryStream([1, 2, 3]);
 
