@@ -136,6 +136,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "s3:GetAccelerateConfiguration",
         "s3:GetLifecycleConfiguration",
         "s3:GetReplicationConfiguration",
+        "s3:GetEncryptionConfiguration",
         "s3:ListBucket",
         "s3:PutBucket*",
         "s3:DeleteBucketPolicy"
