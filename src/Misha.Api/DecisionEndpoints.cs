@@ -41,7 +41,7 @@ public static class DecisionEndpoints
             {
                 return Results.Conflict(new { error = ex.Message });
             }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
         app.MapGet("/applications/{id:guid}/decision/audit", async (
             Guid id,
@@ -50,7 +50,7 @@ public static class DecisionEndpoints
         {
             var records = await audits.GetByApplicationAsync(id, ct);
             return Results.Ok(records.Select(ToAuditResponse));
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.DecisionRead);
     }
 
     private static DecisionAuditResponse ToAuditResponse(Misha.Domain.Decisions.DecisionAudit audit) => new(
