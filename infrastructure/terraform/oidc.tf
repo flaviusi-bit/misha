@@ -42,7 +42,7 @@ resource "aws_iam_role" "github_actions_deploy" {
       Action = "sts:AssumeRoleWithWebIdentity"
       Condition = {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike = { "token.actions.githubusercontent.com:sub" = "repo:flaviusi-bit/misha:environment:aws-dev" }
+        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:flaviusi-bit/misha:environment:aws-dev" }
       }
     }]
   })
@@ -54,18 +54,25 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # ECR: image publishing and repository/lifecycle inspection.
+      # ECR: repository lifecycle, image publishing and configuration.
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       { Effect = "Allow", Action = [
         "ecr:BatchCheckLayerAvailability",
         "ecr:CompleteLayerUpload",
+        "ecr:CreateRepository",
+        "ecr:DeleteRepository",
+        "ecr:DeleteLifecyclePolicy",
         "ecr:DescribeRepositories",
         "ecr:GetLifecyclePolicy",
         "ecr:InitiateLayerUpload",
         "ecr:ListTagsForResource",
+        "ecr:PutEncryptionConfiguration",
         "ecr:PutImage",
+        "ecr:PutImageScanningConfiguration",
+        "ecr:PutImageTagMutability",
         "ecr:PutLifecyclePolicy",
-        "ecr:DeleteLifecyclePolicy",
+        "ecr:TagResource",
+        "ecr:UntagResource",
         "ecr:UploadLayerPart"
       ], Resource = aws_ecr_repository.api.arn },
 
@@ -171,6 +178,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
       # RDS PostgreSQL instance and subnet group.
       { Effect = "Allow", Action = [
         "rds:Describe*",
+        "rds:ListTagsForResource",
         "rds:CreateDBSubnetGroup",
         "rds:DeleteDBSubnetGroup",
         "rds:ModifyDBSubnetGroup",
@@ -200,6 +208,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "acm:RequestCertificate",
         "acm:DeleteCertificate",
         "acm:ListCertificates",
+        "acm:ListTagsForCertificate",
         "acm:AddTagsToCertificate",
         "acm:RemoveTagsFromCertificate"
       ], Resource = "*" },
@@ -207,7 +216,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "route53:GetHostedZone",
         "route53:ListResourceRecordSets",
         "route53:ChangeResourceRecordSets",
-        "route53:ListHostedZonesByName"
+        "route53:ListHostedZonesByName",
+        "route53:GetChange"
       ], Resource = "*" },
 
       # IAM role management for the ECS roles and GitHub deployment role.
