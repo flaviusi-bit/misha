@@ -119,7 +119,6 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ec2:DeleteNatGateway",
         "ec2:CreateSecurityGroup",
         "ec2:DeleteSecurityGroup",
-        "ec2:ModifySecurityGroupRules",
         "ec2:AuthorizeSecurityGroupIngress",
         "ec2:AuthorizeSecurityGroupEgress",
         "ec2:RevokeSecurityGroupIngress",
