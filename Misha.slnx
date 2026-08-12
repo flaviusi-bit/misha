@@ -5,4 +5,5 @@
   <Project Path="src/Misha.Api/Misha.Api.csproj" />
   <Project Path="src/Misha.Worker/Misha.Worker.csproj" />
   <Project Path="tests/Misha.Domain.Tests/Misha.Domain.Tests.csproj" />
+  <Project Path="tests/Misha.Integration.Tests/Misha.Integration.Tests.csproj" />
 </Solution>
