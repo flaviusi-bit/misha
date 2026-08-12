@@ -188,6 +188,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "secretsmanager:DescribeSecret",
         "secretsmanager:GetResourcePolicy",
         "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue",
         "secretsmanager:CreateSecret",
         "secretsmanager:DeleteSecret",
         "secretsmanager:UpdateSecret",
