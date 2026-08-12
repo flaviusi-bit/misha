@@ -61,53 +61,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          SECRET_JSON=$(aws secretsmanager get-secret-value \
-            --secret-id 'misha-dev/application' \
-            --query 'SecretString' \
-            --output text)
-
+          SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id 'misha-dev/application' --query 'SecretString' --output text)
           SECRET_JSON="$SECRET_JSON" python3 - <<'PY'
-          import json
-          import os
-
+          import json, os
           raw = os.environ.get("SECRET_JSON", "")
           if not raw or raw == "None":
-              raise SystemExit(
-                  "misha-dev/application has no SecretString version. "
-                  "Populate the watchlist provider configuration before ECS deployment."
-              )
-
+              raise SystemExit("misha-dev/application has no SecretString version. Populate the watchlist provider configuration before ECS deployment.")
           try:
               secret = json.loads(raw)
           except json.JSONDecodeError as exc:
-              raise SystemExit(
-                  f"misha-dev/application does not contain valid JSON: {exc}"
-              ) from exc
-
+              raise SystemExit(f"misha-dev/application does not contain valid JSON: {exc}") from exc
           provider = str(secret.get("WatchlistProviderName", "")).strip()
           if not provider:
               raise SystemExit("WatchlistProviderName is required.")
-
           api_key = str(secret.get("WatchlistApiKey", "")).strip()
           if not api_key:
               raise SystemExit("WatchlistApiKey is required.")
-
           if provider.lower() == "dev-mock":
               print("Development watchlist mock configuration is present.")
           else:
               required = ("WatchlistBaseUrl", "WatchlistEndpoint")
               missing = [name for name in required if not str(secret.get(name, "")).strip()]
               if missing:
-                  raise SystemExit(
-                      "misha-dev/application is missing required watchlist fields: "
-                      + ", ".join(missing)
-                  )
-
+                  raise SystemExit("misha-dev/application is missing required watchlist fields: " + ", ".join(missing))
               base_url = str(secret["WatchlistBaseUrl"]).strip()
               if not base_url.lower().startswith("https://"):
                   raise SystemExit("WatchlistBaseUrl must use HTTPS.")
-
               print("HTTP watchlist runtime secret is present and structurally valid.")
           PY
 
@@ -129,42 +108,19 @@ jobs:
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
       - name: Fetch current ECS task definition
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition "$ECS_TASK_DEFINITION" \
-            --query taskDefinition > task-definition.json
+        run: aws ecs describe-task-definition --task-definition "$ECS_TASK_DEFINITION" --query taskDefinition > task-definition.json
 
       - name: Materialize Cognito authentication configuration
         run: |
           set -euo pipefail
-
-          USER_POOL_ID=$(aws cognito-idp list-user-pools \
-            --max-results 60 \
-            --query "UserPools[?Name=='${COGNITO_USER_POOL_NAME}'].Id | [0]" \
-            --output text)
-
-          test -n "$USER_POOL_ID" && test "$USER_POOL_ID" != "None" || {
-            echo "Cognito user pool '$COGNITO_USER_POOL_NAME' was not found."
-            exit 1
-          }
-
+          USER_POOL_ID=$(aws cognito-idp list-user-pools --max-results 60 --query "UserPools[?Name=='${COGNITO_USER_POOL_NAME}'].Id | [0]" --output text)
+          test -n "$USER_POOL_ID" && test "$USER_POOL_ID" != "None" || { echo "Cognito user pool '$COGNITO_USER_POOL_NAME' was not found."; exit 1; }
           AUTHORITY="https://cognito-idp.${AWS_REGION}.amazonaws.com/${USER_POOL_ID}"
-
-          aws cognito-idp describe-resource-server \
-            --user-pool-id "$USER_POOL_ID" \
-            --identifier "$COGNITO_API_IDENTIFIER" >/dev/null
-
-          jq --arg authority "$AUTHORITY" \
-             --arg audience "$COGNITO_API_IDENTIFIER" \
-             --arg apiIdentifier "$COGNITO_API_IDENTIFIER" \
-             '.containerDefinitions |= map(if .name == "api" then .environment = ((.environment // []) | map(select(.name != "Authentication__Authority" and .name != "Authentication__Audience" and .name != "Authentication__ApiIdentifier")) + [{name:"Authentication__Authority",value:$authority},{name:"Authentication__Audience",value:$audience},{name:"Authentication__ApiIdentifier",value:$apiIdentifier}]) else . end)' \
-             task-definition.json > task-definition.auth.json
-
+          aws cognito-idp describe-resource-server --user-pool-id "$USER_POOL_ID" --identifier "$COGNITO_API_IDENTIFIER" >/dev/null
+          jq --arg authority "$AUTHORITY" --arg audience "$COGNITO_API_IDENTIFIER" --arg apiIdentifier "$COGNITO_API_IDENTIFIER" '.containerDefinitions |= map(if .name == "api" then .environment = ((.environment // []) | map(select(.name != "Authentication__Authority" and .name != "Authentication__Audience" and .name != "Authentication__ApiIdentifier")) + [{name:"Authentication__Authority",value:$authority},{name:"Authentication__Audience",value:$audience},{name:"Authentication__ApiIdentifier",value:$apiIdentifier}]) else . end)' task-definition.json > task-definition.auth.json
           mv task-definition.auth.json task-definition.json
-
           jq -e '.containerDefinitions[] | select(.name == "api") | any(.environment[]?; .name == "Authentication__Authority" and (.value | length > 0))' task-definition.json >/dev/null
           jq -e '.containerDefinitions[] | select(.name == "api") | any(.environment[]?; .name == "Authentication__Audience" and (.value | length > 0))' task-definition.json >/dev/null
-
           echo "Cognito authentication configuration is present in the task definition."
 
       - name: Render ECS task definition
@@ -186,76 +142,46 @@ jobs:
       - name: Verify deployed API health and authorization boundary
         run: |
           set -euo pipefail
-
-          ALB_DNS=$(aws elbv2 describe-load-balancers \
-            --names misha-dev-alb \
-            --query 'LoadBalancers[0].DNSName' \
-            --output text)
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names misha-dev-alb --query 'LoadBalancers[0].DNSName' --output text)
           BASE_URL="http://${ALB_DNS}"
 
           echo '=== LIVE ==='
-          curl --fail --silent --show-error --max-time 10 \
-            -D /tmp/live.headers -o /tmp/live.body \
-            "${BASE_URL}/health/live"
+          curl --fail --silent --show-error --max-time 10 -D /tmp/live.headers -o /tmp/live.body "${BASE_URL}/health/live"
           grep -q '^HTTP/.* 200 ' /tmp/live.headers
 
           echo '=== READY ==='
-          curl --fail --silent --show-error --max-time 10 \
-            -D /tmp/ready.headers -o /tmp/ready.body \
-            "${BASE_URL}/health/ready"
+          curl --fail --silent --show-error --max-time 10 -D /tmp/ready.headers -o /tmp/ready.body "${BASE_URL}/health/ready"
           grep -q '^HTTP/.* 200 ' /tmp/ready.headers
 
-          echo '=== UNAUTHENTICATED WRITE ==='
-          STATUS=$(curl --silent --show-error --max-time 10 \
-            -o /tmp/unauth.body -w '%{http_code}' \
-            -X POST "${BASE_URL}/applications" \
-            -H 'Content-Type: application/json' \
-            --data '{"applicantReference":"ci-unauthenticated-test"}')
+          echo '=== WATCHLIST DEV-MOCK ==='
+          curl --fail --silent --show-error --max-time 10 -D /tmp/watchlist.headers -o /tmp/watchlist.body "${BASE_URL}/health/watchlist"
+          grep -q '^HTTP/.* 200 ' /tmp/watchlist.headers
+          grep -q '"healthy":"healthy"\|"status":"healthy"' /tmp/watchlist.body
+          grep -q 'Clear' /tmp/watchlist.body
+          grep -q 'PotentialMatch' /tmp/watchlist.body
+          grep -q 'ConfirmedMatch' /tmp/watchlist.body
+          cat /tmp/watchlist.body
 
+          echo '=== UNAUTHENTICATED WRITE ==='
+          STATUS=$(curl --silent --show-error --max-time 10 -o /tmp/unauth.body -w '%{http_code}' -X POST "${BASE_URL}/applications" -H 'Content-Type: application/json' --data '{"applicantReference":"ci-unauthenticated-test"}')
           case "$STATUS" in
             401|403) echo "Authorization boundary enforced: HTTP $STATUS" ;;
-            *)
-              echo "Expected unauthenticated POST /applications to return 401 or 403, got HTTP $STATUS"
-              cat /tmp/unauth.body
-              exit 1
-              ;;
+            *) echo "Expected unauthenticated POST /applications to return 401 or 403, got HTTP $STATUS"; cat /tmp/unauth.body; exit 1 ;;
           esac
-
-          echo '=== DEPLOYED SECURITY SMOKE TESTS PASSED ==='
+          echo '=== DEPLOYED SECURITY + WATCHLIST SMOKE TESTS PASSED ==='
 
       - name: Capture ECS deployment diagnostics
         if: always()
         run: |
           echo '=== ECS SERVICE ==='
-          aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --query 'services[0].{status:status,running:runningCount,desired:desiredCount,pending:pendingCount,taskDefinition:taskDefinition,deployments:deployments[*].{status:status,rolloutState:rolloutState,desired:desiredCount,running:runningCount,pending:pendingCount,failed:failedTasks,taskDefinition:taskDefinition},events:events[0:15].message}' \
-            --output json
-
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].{status:status,running:runningCount,desired:desiredCount,pending:pendingCount,taskDefinition:taskDefinition,deployments:deployments[*].{status:status,rolloutState:rolloutState,desired:desiredCount,running:runningCount,pending:pendingCount,failed:failedTasks,taskDefinition:taskDefinition},events:events[0:15].message}' --output json
           echo '=== RECENT STOPPED TASKS ==='
-          TASK_ARNS=$(aws ecs list-tasks \
-            --cluster "$ECS_CLUSTER" \
-            --service-name "$ECS_SERVICE" \
-            --desired-status STOPPED \
-            --max-results 10 \
-            --query 'taskArns' \
-            --output text)
-
+          TASK_ARNS=$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_SERVICE" --desired-status STOPPED --max-results 10 --query 'taskArns' --output text)
           if [ -n "$TASK_ARNS" ]; then
-            aws ecs describe-tasks \
-              --cluster "$ECS_CLUSTER" \
-              --tasks $TASK_ARNS \
-              --query 'tasks[*].{task:taskArn,lastStatus:lastStatus,desiredStatus:desiredStatus,stopCode:stopCode,stoppedReason:stoppedReason,containers:containers[*].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason}}' \
-              --output json
+            aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks $TASK_ARNS --query 'tasks[*].{task:taskArn,lastStatus:lastStatus,desiredStatus:desiredStatus,stopCode:stopCode,stoppedReason:stoppedReason,containers:containers[*].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason}}' --output json
           else
             echo 'No stopped tasks returned.'
           fi
 
       - name: Verify deployed service
-        run: |
-          aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --query 'services[0].{status:status,running:runningCount,desired:desiredCount,taskDefinition:taskDefinition}' \
-            --output table
+        run: aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].{status:status,running:runningCount,desired:desiredCount,taskDefinition:taskDefinition}' --output table
