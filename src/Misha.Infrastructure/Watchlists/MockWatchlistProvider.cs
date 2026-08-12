@@ -37,5 +37,5 @@ public sealed class MockWatchlistProvider : IWatchlistProvider
     }
 
     private static string Normalize(string value) =>
-        new(value.Where(char.IsLetterOrDigit).Take(32).ToArray()).ToUpperInvariant();
+        new string(value.Where(char.IsLetterOrDigit).Take(32).ToArray()).ToUpperInvariant();
 }
