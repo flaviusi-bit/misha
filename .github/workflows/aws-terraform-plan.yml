@@ -70,15 +70,44 @@ jobs:
           if not document:
               raise SystemExit("IAM policy document was empty")
 
-          if isinstance(document, str):
-              document = urllib.parse.unquote(document)
-              policy = json.loads(document)
-          elif isinstance(document, dict):
-              policy = document
-          else:
+          def parse_policy_document(value):
+              if isinstance(value, dict):
+                  return value
+              if not isinstance(value, str):
+                  raise SystemExit(
+                      f"Unexpected IAM PolicyDocument type: {type(value).__name__}"
+                  )
+
+              candidates = [value]
+              decoded = urllib.parse.unquote(value)
+              if decoded != value:
+                  candidates.append(decoded)
+
+              last_error = None
+              for candidate in candidates:
+                  try:
+                      parsed = json.loads(candidate)
+                  except json.JSONDecodeError as exc:
+                      last_error = exc
+                      continue
+
+                  if isinstance(parsed, dict):
+                      return parsed
+
+                  if isinstance(parsed, str):
+                      try:
+                          nested = json.loads(parsed)
+                      except json.JSONDecodeError as exc:
+                          last_error = exc
+                          continue
+                      if isinstance(nested, dict):
+                          return nested
+
               raise SystemExit(
-                  f"Unexpected IAM PolicyDocument type: {type(document).__name__}"
+                  f"Unable to parse IAM PolicyDocument as JSON: {last_error}"
               )
+
+          policy = parse_policy_document(document)
 
           required_actions = {
               "cognito-idp:GetUserPoolMfaConfig",
