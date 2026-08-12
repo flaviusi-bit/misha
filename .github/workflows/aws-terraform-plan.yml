@@ -76,34 +76,44 @@ jobs:
           elif isinstance(document, dict):
               policy = document
           else:
-              raise SystemExit(f"Unexpected IAM PolicyDocument type: {type(document).__name__}")
+              raise SystemExit(
+                  f"Unexpected IAM PolicyDocument type: {type(document).__name__}"
+              )
 
-          action = "cognito-idp:GetUserPoolMfaConfig"
+          required_actions = {
+              "cognito-idp:GetUserPoolMfaConfig",
+              "cognito-idp:GetGroup",
+              "cognito-idp:CreateGroup",
+              "cognito-idp:DeleteGroup",
+              "cognito-idp:UpdateGroup",
+          }
+
           statements = policy.setdefault("Statement", [])
           if isinstance(statements, dict):
               statements = [statements]
               policy["Statement"] = statements
 
-          if not any(
-              statement.get("Effect") == "Allow"
-              and action in ([statement["Action"]] if isinstance(statement.get("Action"), str) else statement.get("Action", []))
+          allow_statements = [
+              statement
               for statement in statements
-          ):
-              for statement in statements:
-                  if statement.get("Effect") != "Allow":
-                      continue
-                  actions = statement.get("Action", [])
-                  if isinstance(actions, str):
-                      actions = [actions]
-                      statement["Action"] = actions
-                  actions.append(action)
-                  break
-              else:
-                  statements.append({
-                      "Effect": "Allow",
-                      "Action": [action],
-                      "Resource": "*",
-                  })
+              if statement.get("Effect") == "Allow"
+          ]
+
+          if not allow_statements:
+              statements.append({
+                  "Effect": "Allow",
+                  "Action": sorted(required_actions),
+                  "Resource": "*",
+              })
+          else:
+              actions = allow_statements[0].get("Action", [])
+              if isinstance(actions, str):
+                  actions = [actions]
+                  allow_statements[0]["Action"] = actions
+
+              missing = required_actions.difference(actions)
+              if missing:
+                  actions.extend(sorted(missing))
 
           with open(policy_path, "w", encoding="utf-8") as handle:
               json.dump(policy, handle, separators=(",", ":"))
