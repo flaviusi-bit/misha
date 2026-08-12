@@ -49,50 +49,65 @@ jobs:
 
           ROLE_NAME="misha-dev-github-actions-deploy"
           POLICY_NAME="misha-dev-github-actions-cognito"
+          RAW_POLICY_FILE="${RUNNER_TEMP}/cognito-policy-response.json"
           POLICY_FILE="${RUNNER_TEMP}/cognito-policy.json"
 
           aws iam get-role-policy \
             --role-name "$ROLE_NAME" \
             --policy-name "$POLICY_NAME" \
-            --query 'PolicyDocument' \
-            --output text \
-            | python3 -c '
+            --output json > "$RAW_POLICY_FILE"
+
+          python3 - "$RAW_POLICY_FILE" "$POLICY_FILE" <<'PY'
           import json
           import sys
           import urllib.parse
 
-          document = sys.stdin.read()
-          if not document.strip():
+          raw_path, policy_path = sys.argv[1:]
+          with open(raw_path, encoding="utf-8") as handle:
+              response = json.load(handle)
+
+          document = response.get("PolicyDocument")
+          if not document:
               raise SystemExit("IAM policy document was empty")
 
-          policy = json.loads(urllib.parse.unquote(document))
-          action = "cognito-idp:GetUserPoolMfaConfig"
+          if isinstance(document, str):
+              document = urllib.parse.unquote(document)
+              policy = json.loads(document)
+          elif isinstance(document, dict):
+              policy = document
+          else:
+              raise SystemExit(f"Unexpected IAM PolicyDocument type: {type(document).__name__}")
 
+          action = "cognito-idp:GetUserPoolMfaConfig"
           statements = policy.setdefault("Statement", [])
           if isinstance(statements, dict):
               statements = [statements]
               policy["Statement"] = statements
 
-          for statement in statements:
-              actions = statement.get("Action", [])
-              if isinstance(actions, str):
-                  actions = [actions]
-              if statement.get("Effect") == "Allow" and action in actions:
-                  break
-          else:
+          if not any(
+              statement.get("Effect") == "Allow"
+              and action in ([statement["Action"]] if isinstance(statement.get("Action"), str) else statement.get("Action", []))
+              for statement in statements
+          ):
               for statement in statements:
+                  if statement.get("Effect") != "Allow":
+                      continue
                   actions = statement.get("Action", [])
-                  if statement.get("Effect") == "Allow":
-                      if isinstance(actions, str):
-                          actions = [actions]
-                          statement["Action"] = actions
-                      actions.append(action)
-                      break
+                  if isinstance(actions, str):
+                      actions = [actions]
+                      statement["Action"] = actions
+                  actions.append(action)
+                  break
               else:
-                  statements.append({"Effect": "Allow", "Action": [action], "Resource": "*"})
+                  statements.append({
+                      "Effect": "Allow",
+                      "Action": [action],
+                      "Resource": "*",
+                  })
 
-          json.dump(policy, sys.stdout, separators=(",", ":"))
-          ' > "$POLICY_FILE"
+          with open(policy_path, "w", encoding="utf-8") as handle:
+              json.dump(policy, handle, separators=(",", ":"))
+          PY
 
           aws iam put-role-policy \
             --role-name "$ROLE_NAME" \
