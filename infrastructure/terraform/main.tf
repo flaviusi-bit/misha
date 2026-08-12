@@ -417,5 +417,5 @@ resource "aws_db_instance" "postgres" {
   publicly_accessible         = false
   skip_final_snapshot         = true
   deletion_protection         = var.enable_deletion_protection
-  backup_retention_period     = 7
+  backup_retention_period     = 1
 }
