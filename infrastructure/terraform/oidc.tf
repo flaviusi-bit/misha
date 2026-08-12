@@ -187,6 +187,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
       { Effect = "Allow", Action = [
         "secretsmanager:DescribeSecret",
         "secretsmanager:GetResourcePolicy",
+        "secretsmanager:GetSecretValue",
         "secretsmanager:CreateSecret",
         "secretsmanager:DeleteSecret",
         "secretsmanager:UpdateSecret",
