@@ -1,9 +1,7 @@
 using Misha.Application.Decisions;
 using Misha.Application.ManualReviews;
-using Misha.Application.Watchlists;
 using Misha.Infrastructure.ManualReviews;
 using Misha.Infrastructure.Persistence;
-using Misha.Infrastructure.Watchlists;
 
 namespace Misha.Api;
 
@@ -17,12 +15,5 @@ public static class DecisionServiceRegistration
         services.AddScoped<DecisionService>();
         services.AddScoped<ManualReviewService>();
         services.AddHostedService<DecisionAuditSchemaInitializer>();
-
-        // Registered after the legacy unavailable provider so this becomes the active gateway.
-        services.AddHttpClient("watchlist", client =>
-        {
-            client.Timeout = TimeSpan.FromSeconds(10);
-        });
-        services.AddScoped<IWatchlistProvider, HttpWatchlistProvider>();
     }
 }
