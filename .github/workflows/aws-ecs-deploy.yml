@@ -57,6 +57,55 @@ jobs:
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
+      - name: Validate watchlist runtime secret
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SECRET_JSON=$(aws secretsmanager get-secret-value \
+            --secret-id 'misha-dev/application' \
+            --query 'SecretString' \
+            --output text)
+
+          SECRET_JSON="$SECRET_JSON" python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          raw = os.environ.get("SECRET_JSON", "")
+          if not raw or raw == "None":
+              raise SystemExit(
+                  "misha-dev/application has no SecretString version. "
+                  "Populate the watchlist provider configuration before ECS deployment."
+              )
+
+          try:
+              secret = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(
+                  f"misha-dev/application does not contain valid JSON: {exc}"
+              ) from exc
+
+          required = (
+              "WatchlistProviderName",
+              "WatchlistBaseUrl",
+              "WatchlistEndpoint",
+              "WatchlistApiKey",
+          )
+          missing = [name for name in required if not str(secret.get(name, "")).strip()]
+          if missing:
+              raise SystemExit(
+                  "misha-dev/application is missing required watchlist fields: "
+                  + ", ".join(missing)
+              )
+
+          base_url = str(secret["WatchlistBaseUrl"]).strip()
+          if not base_url.lower().startswith("https://"):
+              raise SystemExit("WatchlistBaseUrl must use HTTPS.")
+
+          print("Watchlist runtime secret is present and structurally valid.")
+          PY
+
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
