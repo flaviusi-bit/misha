@@ -193,9 +193,12 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["secretsmanager:GetSecretValue"]
-      Resource = aws_db_instance.postgres.master_user_secret[0].secret_arn
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = [
+        aws_db_instance.postgres.master_user_secret[0].secret_arn,
+        aws_secretsmanager_secret.application.arn
+      ]
     }]
   })
 }
@@ -251,7 +254,11 @@ resource "aws_ecs_task_definition" "api" {
     ]
     secrets = [
       { name = "DB_USER", valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:username::" },
-      { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:password::" }
+      { name = "DB_PASSWORD", valueFrom = "${aws_db_instance.postgres.master_user_secret[0].secret_arn}:password::" },
+      { name = "Watchlist__ProviderName", valueFrom = "${aws_secretsmanager_secret.application.arn}:WatchlistProviderName::" },
+      { name = "Watchlist__BaseUrl", valueFrom = "${aws_secretsmanager_secret.application.arn}:WatchlistBaseUrl::" },
+      { name = "Watchlist__Endpoint", valueFrom = "${aws_secretsmanager_secret.application.arn}:WatchlistEndpoint::" },
+      { name = "Watchlist__ApiKey", valueFrom = "${aws_secretsmanager_secret.application.arn}:WatchlistApiKey::" }
     ]
     logConfiguration = {
       logDriver = "awslogs"
