@@ -27,51 +27,32 @@ if (string.IsNullOrWhiteSpace(connectionString))
     var dbUser = builder.Configuration["DB_USER"];
     var dbPassword = builder.Configuration["DB_PASSWORD"];
 
-    if (string.IsNullOrWhiteSpace(dbHost) ||
-        string.IsNullOrWhiteSpace(dbName) ||
-        string.IsNullOrWhiteSpace(dbUser) ||
-        string.IsNullOrWhiteSpace(dbPassword))
-    {
+    if (string.IsNullOrWhiteSpace(dbHost) || string.IsNullOrWhiteSpace(dbName) || string.IsNullOrWhiteSpace(dbUser) || string.IsNullOrWhiteSpace(dbPassword))
         throw new InvalidOperationException("Database configuration is missing. Expected ConnectionStrings:Misha or ECS DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD settings.");
-    }
 
     connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword}";
 }
 
-builder.Services.AddDbContext<MishaDbContext>(options =>
-    options.UseNpgsql(connectionString));
+builder.Services.AddDbContext<MishaDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
-builder.Services.AddScoped<IDocumentStorage>(sp =>
-    new S3DocumentStorage(
-        sp.GetRequiredService<IAmazonS3>(),
-        builder.Configuration["DocumentStorage:BucketName"] ?? string.Empty));
+builder.Services.AddScoped<IDocumentStorage>(sp => new S3DocumentStorage(sp.GetRequiredService<IAmazonS3>(), builder.Configuration["DocumentStorage:BucketName"] ?? string.Empty));
 builder.Services.AddScoped<IApplicationRepository, EfApplicationRepository>();
 builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactRepository>();
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
 
-builder.Services.AddHttpClient("watchlist", client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(10);
-});
-
+builder.Services.AddHttpClient("watchlist", client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddScoped<IWatchlistProvider>(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
     var providerName = configuration["Watchlist:ProviderName"]?.Trim();
-
     return string.Equals(providerName, "dev-mock", StringComparison.OrdinalIgnoreCase)
         ? new MockWatchlistProvider()
-        : new HttpWatchlistProvider(
-            sp.GetRequiredService<IHttpClientFactory>(),
-            configuration);
+        : new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), configuration);
 });
 
 builder.Services.AddScoped<IPassportVerificationProvider, HttpPassportVerificationProvider>();
-builder.Services.AddHttpClient("passport-verification", client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(10);
-});
+builder.Services.AddHttpClient("passport-verification", client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddScoped<ApplicationService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<PassportService>();
@@ -90,68 +71,51 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = async (context, cancellationToken) =>
     {
-        var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-            .CreateLogger("Misha.Security.RateLimiting");
+        var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Misha.Security.RateLimiting");
         logger.LogWarning("eTA verification request rejected by rate limiter for {Path}", context.HttpContext.Request.Path);
         context.HttpContext.Response.Headers.RetryAfter = "60";
         await ValueTask.CompletedTask;
     };
-
-    options.AddPolicy("eta-verification", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                AutoReplenishment = true
-            }));
+    options.AddPolicy("eta-verification", httpContext => RateLimitPartition.GetFixedWindowLimiter(httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+    {
+        PermitLimit = 10,
+        Window = TimeSpan.FromMinutes(1),
+        QueueLimit = 0,
+        AutoReplenishment = true
+    }));
 });
 
 var cognitoAuthority = builder.Configuration["Authentication:Authority"];
 var cognitoAudience = builder.Configuration["Authentication:Audience"];
 var cognitoApiIdentifier = builder.Configuration["Authentication:ApiIdentifier"] ?? "https://misha-api";
+if (string.IsNullOrWhiteSpace(cognitoAuthority)) throw new InvalidOperationException("Authentication:Authority is required.");
 
-if (string.IsNullOrWhiteSpace(cognitoAuthority))
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
-    throw new InvalidOperationException("Authentication:Authority is required.");
-}
-
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    options.Authority = cognitoAuthority;
+    options.RequireHttpsMetadata = true;
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.Authority = cognitoAuthority;
-        options.RequireHttpsMetadata = true;
-        options.TokenValidationParameters = new TokenValidationParameters
+        ValidateIssuer = true,
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        NameClaimType = "username",
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = context =>
         {
-            ValidateIssuer = true,
-            ValidateAudience = false,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            NameClaimType = "username",
-        };
-
-        options.Events = new JwtBearerEvents
-        {
-            OnTokenValidated = context =>
-            {
-                var tokenUse = context.Principal?.FindFirst("token_use")?.Value;
-                if (!string.Equals(tokenUse, "access", StringComparison.Ordinal))
-                {
-                    context.Fail("Only Cognito access tokens may be used to call the API.");
-                }
-
-                return Task.CompletedTask;
-            }
-        };
-    });
+            var tokenUse = context.Principal?.FindFirst("token_use")?.Value;
+            if (!string.Equals(tokenUse, "access", StringComparison.Ordinal)) context.Fail("Only Cognito access tokens may be used to call the API.");
+            return Task.CompletedTask;
+        }
+    };
+});
 
 AuthorizationPolicies.Add(builder.Services, cognitoApiIdentifier);
 
 var app = builder.Build();
-
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<MishaDbContext>();
@@ -165,6 +129,7 @@ app.UseRateLimiter();
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
+WatchlistSmokeEndpoints.Map(app);
 app.MapPaymentEndpoints();
 app.MapEtaEndpoints();
 DecisionEndpoints.Map(app);
@@ -180,9 +145,7 @@ app.MapPost("/applications", async (CreateApplicationRequest request, Applicatio
 app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service, CancellationToken ct) =>
 {
     var application = await service.GetAsync(id, ct);
-    return application is null
-        ? Results.NotFound()
-        : Results.Ok(new ApplicationResponse(application.Id, application.ApplicantReference, application.Status.ToString(), application.CreatedAtUtc, application.SubmittedAtUtc, application.ProcessingStartedAtUtc, application.DecidedAtUtc, application.CancelledAtUtc, application.RefusalReason));
+    return application is null ? Results.NotFound() : Results.Ok(new ApplicationResponse(application.Id, application.ApplicantReference, application.Status.ToString(), application.CreatedAtUtc, application.SubmittedAtUtc, application.ProcessingStartedAtUtc, application.DecidedAtUtc, application.CancelledAtUtc, application.RefusalReason));
 }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
 app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
@@ -191,11 +154,7 @@ app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationServic
 app.MapPost("/applications/{id:guid}/refuse", async (Guid id, RefuseApplicationRequest request, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
-app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) =>
-{
-    var documents = await service.GetAsync(id, ct);
-    return Results.Ok(documents.Select(ToDocumentResponse));
-}).RequireAuthorization(AuthorizationPolicies.ApiRead);
+app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) => (await service.GetAsync(id, ct)).Select(ToDocumentResponse)).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
 app.MapPost("/applications/{id:guid}/documents", async (Guid id, DocumentRequest request, DocumentService service, CancellationToken ct) =>
 {
@@ -234,11 +193,7 @@ app.MapGet("/applications/{id:guid}/passport", async (Guid id, PassportService s
 
 app.MapPost("/applications/{id:guid}/passport/verify", async (Guid id, PassportVerificationService service, CancellationToken ct) =>
 {
-    try
-    {
-        var result = await service.VerifyAsync(id, ct);
-        return Results.Ok(new PassportVerificationResponse(result.Decision.ToString(), result.Reference, result.ErrorMessage));
-    }
+    try { var result = await service.VerifyAsync(id, ct); return Results.Ok(new PassportVerificationResponse(result.Decision.ToString(), result.Reference, result.ErrorMessage)); }
     catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
 }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
@@ -256,18 +211,13 @@ app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService
 
 app.MapPost("/applications/{id:guid}/policy/evaluate", async (Guid id, PolicyService service, CancellationToken ct) =>
 {
-    try
-    {
-        var evaluation = await service.EvaluateAsync(id, ct);
-        return Results.Ok(new PolicyEvaluationResponse(evaluation.Decision.ToString(), evaluation.Reasons));
-    }
+    try { var evaluation = await service.EvaluateAsync(id, ct); return Results.Ok(new PolicyEvaluationResponse(evaluation.Decision.ToString(), evaluation.Reasons)); }
     catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
 }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.Run();
 
 static DocumentResponse ToDocumentResponse(Misha.Domain.Documents.DocumentArtifact document) => new(document.Id, document.ApplicationId, document.DocumentType.ToString(), document.FileName, document.ContentType, document.SizeBytes, document.Sha256, document.StorageKey, document.CreatedAtUtc);
-
 static async Task<IResult> ExecuteCommand(Func<Task> command)
 {
     try { await command(); return Results.NoContent(); }
