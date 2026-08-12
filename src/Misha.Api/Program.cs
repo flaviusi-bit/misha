@@ -58,10 +58,10 @@ builder.Services.AddHttpClient("watchlist", client =>
 builder.Services.AddScoped<IWatchlistProvider>(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
-    var baseUrl = configuration["Watchlist:BaseUrl"]?.Trim();
+    var providerName = configuration["Watchlist:ProviderName"]?.Trim();
 
-    return string.IsNullOrWhiteSpace(baseUrl)
-        ? new UnavailableWatchlistProvider()
+    return string.Equals(providerName, "dev-mock", StringComparison.OrdinalIgnoreCase)
+        ? new MockWatchlistProvider()
         : new HttpWatchlistProvider(
             sp.GetRequiredService<IHttpClientFactory>(),
             configuration);
@@ -124,10 +124,6 @@ builder.Services
     {
         options.Authority = cognitoAuthority;
         options.RequireHttpsMetadata = true;
-
-        // Cognito access tokens are the API credential. They carry `scope` and
-        // `client_id`, while the ID token carries the OIDC `aud` claim. Do not
-        // accept an ID token as an API bearer token by accident.
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -184,39 +180,16 @@ app.MapPost("/applications", async (CreateApplicationRequest request, Applicatio
 app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service, CancellationToken ct) =>
 {
     var application = await service.GetAsync(id, ct);
-
     return application is null
         ? Results.NotFound()
-        : Results.Ok(new ApplicationResponse(
-            application.Id,
-            application.ApplicantReference,
-            application.Status.ToString(),
-            application.CreatedAtUtc,
-            application.SubmittedAtUtc,
-            application.ProcessingStartedAtUtc,
-            application.DecidedAtUtc,
-            application.CancelledAtUtc,
-            application.RefusalReason));
+        : Results.Ok(new ApplicationResponse(application.Id, application.ApplicantReference, application.Status.ToString(), application.CreatedAtUtc, application.SubmittedAtUtc, application.ProcessingStartedAtUtc, application.DecidedAtUtc, application.CancelledAtUtc, application.RefusalReason));
 }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
-app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
-
-app.MapPost("/applications/{id:guid}/process", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-
-app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-
-app.MapPost("/applications/{id:guid}/refuse", async (
-    Guid id,
-    RefuseApplicationRequest request,
-    ApplicationService service,
-    CancellationToken ct) =>
-    await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-
-app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapPost("/applications/{id:guid}/process", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+app.MapPost("/applications/{id:guid}/refuse", async (Guid id, RefuseApplicationRequest request, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) =>
 {
@@ -224,11 +197,7 @@ app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService 
     return Results.Ok(documents.Select(ToDocumentResponse));
 }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
-app.MapPost("/applications/{id:guid}/documents", async (
-    Guid id,
-    DocumentRequest request,
-    DocumentService service,
-    CancellationToken ct) =>
+app.MapPost("/applications/{id:guid}/documents", async (Guid id, DocumentRequest request, DocumentService service, CancellationToken ct) =>
 {
     try
     {
@@ -239,12 +208,7 @@ app.MapPost("/applications/{id:guid}/documents", async (
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
 }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
-app.MapPost("/applications/{id:guid}/documents/upload", async (
-    Guid id,
-    [FromForm] DocumentType documentType,
-    [FromForm] IFormFile file,
-    DocumentService service,
-    CancellationToken ct) =>
+app.MapPost("/applications/{id:guid}/documents/upload", async (Guid id, [FromForm] DocumentType documentType, [FromForm] IFormFile file, DocumentService service, CancellationToken ct) =>
 {
     try
     {
