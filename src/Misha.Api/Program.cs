@@ -235,141 +235,90 @@ app.MapPost("/applications/{id:guid}/documents", async (
         var document = await service.RegisterAsync(id, request.DocumentType, request.FileName, request.ContentType, request.SizeBytes, request.Sha256, request.StorageKey, ct);
         return Results.Created($"/applications/{id}/documents", ToDocumentResponse(document));
     }
-    catch (ArgumentException ex)
-    {
-        return Results.BadRequest(new { error = ex.Message });
-    }
+    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
 }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
-app.MapGet("/applications/{id:guid}/documents/{documentId:guid}", async (
+app.MapPost("/applications/{id:guid}/documents/upload", async (
     Guid id,
-    Guid documentId,
+    [FromForm] DocumentType documentType,
+    [FromForm] IFormFile file,
     DocumentService service,
     CancellationToken ct) =>
 {
-    var document = await service.GetAsync(id, documentId, ct);
-    return document is null ? Results.NotFound() : Results.Ok(ToDocumentResponse(document));
-}).RequireAuthorization(AuthorizationPolicies.ApiRead);
-
-app.MapPost("/applications/{id:guid}/documents/{documentId:guid}/verify", async (
-    Guid id,
-    Guid documentId,
-    PassportService service,
-    CancellationToken ct) =>
-{
     try
     {
-        var passport = await service.VerifyAsync(id, documentId, ct);
-        return Results.Ok(ToPassportResponse(passport));
+        if (file is null) return Results.BadRequest(new { error = "A document file is required." });
+        var document = await service.UploadAsync(id, documentType, file.FileName, file.ContentType, file.OpenReadStream(), ct);
+        return Results.Created($"/applications/{id}/documents", ToDocumentResponse(document));
     }
-    catch (KeyNotFoundException ex)
-    {
-        return Results.NotFound(new { error = ex.Message });
-    }
-    catch (ArgumentException ex)
-    {
-        return Results.BadRequest(new { error = ex.Message });
-    }
+    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+}).DisableAntiforgery().RequireAuthorization(AuthorizationPolicies.ApiWrite);
+
+app.MapPost("/applications/{id:guid}/passport", async (Guid id, PassportRequest request, PassportService service, CancellationToken ct) =>
+{
+    await service.CreateAsync(id, request.DocumentNumber, request.IssuingCountry, request.Surname, request.GivenNames, request.DateOfBirth, request.Nationality, request.ExpiryDate, ct);
+    return Results.NoContent();
 }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
-app.MapGet("/applications/{id:guid}/passport", async (
-    Guid id,
-    PassportService service,
-    CancellationToken ct) =>
+app.MapGet("/applications/{id:guid}/passport", async (Guid id, PassportService service, CancellationToken ct) =>
 {
     var passport = await service.GetAsync(id, ct);
-    return passport is null ? Results.NotFound() : Results.Ok(ToPassportResponse(passport));
+    return passport is null ? Results.NotFound() : Results.Ok(new PassportResponse(passport.Id, passport.ApplicationId, passport.DocumentNumber, passport.IssuingCountry, passport.Surname, passport.GivenNames, passport.DateOfBirth, passport.Nationality, passport.ExpiryDate, passport.IsExpired(DateOnly.FromDateTime(DateTime.UtcNow))));
 }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
-app.MapPost("/applications/{id:guid}/watchlist/check", async (
-    Guid id,
-    WatchlistService service,
-    CancellationToken ct) =>
+app.MapPost("/applications/{id:guid}/passport/verify", async (Guid id, PassportVerificationService service, CancellationToken ct) =>
 {
     try
     {
-        var check = await service.ScreenAsync(id, ct);
-        return Results.Ok(ToWatchlistResponse(check));
+        var result = await service.VerifyAsync(id, ct);
+        return Results.Ok(new PassportVerificationResponse(result.Decision.ToString(), result.Reference, result.ErrorMessage));
     }
-    catch (KeyNotFoundException ex)
-    {
-        return Results.NotFound(new { error = ex.Message });
-    }
+    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
 }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
-app.MapGet("/applications/{id:guid}/watchlist/latest", async (
-    Guid id,
-    WatchlistService service,
-    CancellationToken ct) =>
+app.MapPost("/applications/{id:guid}/watchlist/screen", async (Guid id, WatchlistService service, CancellationToken ct) =>
+{
+    var check = await service.ScreenAsync(id, ct);
+    return Results.Ok(new WatchlistResponse(check.Id, check.ApplicationId, check.Provider, check.Decision.ToString(), check.MatchReference, check.ErrorMessage, check.CheckedAtUtc));
+}).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+
+app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService service, CancellationToken ct) =>
 {
     var check = await service.GetLatestAsync(id, ct);
-    return check is null ? Results.NotFound() : Results.Ok(ToWatchlistResponse(check));
-}).RequireAuthorization(AuthorizationPolicies.ApiRead);
+    return check is null ? Results.NotFound() : Results.Ok(new WatchlistResponse(check.Id, check.ApplicationId, check.Provider, check.Decision.ToString(), check.MatchReference, check.ErrorMessage, check.CheckedAtUtc));
+}).RequireAuthorization(AuthorizationPolicies.DecisionRead);
+
+app.MapPost("/applications/{id:guid}/policy/evaluate", async (Guid id, PolicyService service, CancellationToken ct) =>
+{
+    try
+    {
+        var evaluation = await service.EvaluateAsync(id, ct);
+        return Results.Ok(new PolicyEvaluationResponse(evaluation.Decision.ToString(), evaluation.Reasons));
+    }
+    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
+}).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.Run();
 
+static DocumentResponse ToDocumentResponse(Misha.Domain.Documents.DocumentArtifact document) => new(document.Id, document.ApplicationId, document.DocumentType.ToString(), document.FileName, document.ContentType, document.SizeBytes, document.Sha256, document.StorageKey, document.CreatedAtUtc);
+
 static async Task<IResult> ExecuteCommand(Func<Task> command)
 {
-    try
-    {
-        await command();
-        return Results.NoContent();
-    }
-    catch (KeyNotFoundException ex)
-    {
-        return Results.NotFound(new { error = ex.Message });
-    }
-    catch (InvalidOperationException ex)
-    {
-        return Results.Conflict(new { error = ex.Message });
-    }
+    try { await command(); return Results.NoContent(); }
+    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
 }
 
-static object ToDocumentResponse(DocumentArtifact document) => new
-{
-    document.Id,
-    document.ApplicationId,
-    document.DocumentType,
-    document.FileName,
-    document.ContentType,
-    document.SizeBytes,
-    document.Sha256,
-    document.StorageKey,
-    document.Status,
-    document.CreatedAtUtc,
-    document.VerifiedAtUtc
-};
-
-static object ToPassportResponse(PassportDocument passport) => new
-{
-    passport.Id,
-    passport.ApplicationId,
-    passport.DocumentId,
-    passport.DocumentNumber,
-    passport.IssuingCountry,
-    passport.Surname,
-    passport.GivenNames,
-    passport.DateOfBirth,
-    passport.Nationality,
-    passport.ExpiryDate,
-    passport.VerificationStatus,
-    passport.VerificationReference,
-    passport.VerificationError,
-    passport.CreatedAtUtc,
-    passport.VerifiedAtUtc
-};
-
-static object ToWatchlistResponse(Misha.Domain.Watchlists.WatchlistCheck check) => new
-{
-    check.Id,
-    check.ApplicationId,
-    check.ProviderName,
-    check.Status,
-    check.Decision,
-    check.MatchReference,
-    check.ErrorMessage,
-    check.CreatedAtUtc,
-    check.CompletedAtUtc
-};
-
-public partial class Program;
+public sealed record CreateApplicationRequest(string ApplicantReference);
+public sealed record RefuseApplicationRequest(string Reason);
+public sealed record ApplicationResponse(Guid Id, string ApplicantReference, string Status, DateTimeOffset CreatedAtUtc, DateTimeOffset? SubmittedAtUtc, DateTimeOffset? ProcessingStartedAtUtc, DateTimeOffset? DecidedAtUtc, DateTimeOffset? CancelledAtUtc, string? RefusalReason);
+public sealed record DocumentRequest(DocumentType DocumentType, string FileName, string ContentType, long SizeBytes, string Sha256, string StorageKey);
+public sealed record DocumentResponse(Guid Id, Guid ApplicationId, string DocumentType, string FileName, string ContentType, long SizeBytes, string Sha256, string StorageKey, DateTimeOffset CreatedAtUtc);
+public sealed record PassportRequest(string DocumentNumber, string IssuingCountry, string Surname, string GivenNames, DateOnly DateOfBirth, string Nationality, DateOnly ExpiryDate);
+public sealed record PassportResponse(Guid Id, Guid ApplicationId, string DocumentNumber, string IssuingCountry, string Surname, string GivenNames, DateOnly DateOfBirth, string Nationality, DateOnly ExpiryDate, bool IsExpired);
+public sealed record PassportVerificationResponse(string Decision, string? Reference, string? ErrorMessage);
+public sealed record WatchlistResponse(Guid Id, Guid ApplicationId, string Provider, string Decision, string? MatchReference, string? ErrorMessage, DateTimeOffset? CheckedAtUtc);
+public sealed record PolicyEvaluationResponse(string Decision, IReadOnlyList<string> Reasons);
