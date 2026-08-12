@@ -51,33 +51,48 @@ jobs:
           POLICY_NAME="misha-dev-github-actions-cognito"
           POLICY_FILE="${RUNNER_TEMP}/cognito-policy.json"
 
-          python3 - <<'PY' > "${RUNNER_TEMP}/patch-policy.py"
+          aws iam get-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --query 'PolicyDocument' \
+            --output text \
+            | python3 -c '
           import json
           import sys
           import urllib.parse
 
           document = sys.stdin.read()
-          policy = json.loads(urllib.parse.unquote(document))
+          if not document.strip():
+              raise SystemExit("IAM policy document was empty")
 
+          policy = json.loads(urllib.parse.unquote(document))
           action = "cognito-idp:GetUserPoolMfaConfig"
-          for statement in policy.get("Statement", []):
+
+          statements = policy.setdefault("Statement", [])
+          if isinstance(statements, dict):
+              statements = [statements]
+              policy["Statement"] = statements
+
+          for statement in statements:
               actions = statement.get("Action", [])
               if isinstance(actions, str):
                   actions = [actions]
               if statement.get("Effect") == "Allow" and action in actions:
                   break
           else:
-              policy["Statement"][0]["Action"].append(action)
+              for statement in statements:
+                  actions = statement.get("Action", [])
+                  if statement.get("Effect") == "Allow":
+                      if isinstance(actions, str):
+                          actions = [actions]
+                          statement["Action"] = actions
+                      actions.append(action)
+                      break
+              else:
+                  statements.append({"Effect": "Allow", "Action": [action], "Resource": "*"})
 
           json.dump(policy, sys.stdout, separators=(",", ":"))
-          PY
-
-          aws iam get-role-policy \
-            --role-name "$ROLE_NAME" \
-            --policy-name "$POLICY_NAME" \
-            --query 'PolicyDocument' \
-            --output text \
-            | python3 "${RUNNER_TEMP}/patch-policy.py" > "$POLICY_FILE"
+          ' > "$POLICY_FILE"
 
           aws iam put-role-policy \
             --role-name "$ROLE_NAME" \
