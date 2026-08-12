@@ -1,6 +1,7 @@
 using Misha.Domain.Documents;
 using Misha.Domain.Watchlists;
 using Misha.Infrastructure.Watchlists;
+using Xunit;
 
 namespace Misha.Domain.Tests;
 
