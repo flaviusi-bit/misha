@@ -11,6 +11,7 @@ resource "aws_iam_role_policy" "github_actions_cognito" {
         "cognito-idp:DeleteUserPool",
         "cognito-idp:DescribeUserPool",
         "cognito-idp:UpdateUserPool",
+        "cognito-idp:GetUserPoolMfaConfig",
         "cognito-idp:ListUserPools",
         "cognito-idp:TagResource",
         "cognito-idp:UntagResource",
