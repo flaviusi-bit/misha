@@ -1,0 +1,90 @@
+name: AWS Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type APPLY to authorize the Terraform apply"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-terraform-apply-dev
+  cancel-in-progress: false
+
+jobs:
+  terraform-apply:
+    if: ${{ inputs.confirm == 'APPLY' }}
+    runs-on: ubuntu-latest
+    environment: aws-dev
+
+    defaults:
+      run:
+        working-directory: infrastructure/terraform
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate deployment role configuration
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          test -n "$AWS_DEPLOY_ROLE_ARN" || {
+            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
+            exit 1
+          }
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubActionsTerraformApply
+
+      - name: Verify AWS identity
+        working-directory: .
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.10.x'
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply approved plan
+        run: terraform apply -input=false tfplan
+
+      - name: Verify managed application secret exists
+        run: |
+          SECRET_NAME="misha-dev/application"
+          aws secretsmanager describe-secret \
+            --secret-id "$SECRET_NAME" \
+            --query '{ARN:ARN,Name:Name}' \
+            --output table
+
+      - name: Verify ECS execution policy references application secret
+        run: |
+          aws iam get-role-policy \
+            --role-name misha-dev-ecs-execution \
+            --policy-name misha-dev-ecs-execution-secrets \
+            --query 'PolicyDocument.Statement[0].Resource' \
+            --output json
+
+      - name: Verify Terraform state is clean
+        run: terraform plan -input=false -detailed-exitcode
