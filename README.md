@@ -75,10 +75,16 @@ Architecture documentation is not treated as implementation evidence.
 
 **Architecture:** baseline established  
 **Repository bootstrap:** IMPLEMENTED  
-**Domain application slice:** IMPLEMENTED  
-**Automated tests:** CREATED; CI validation pending  
-**AWS deployment:** NOT IMPLEMENTED  
+**Domain/application slices:** IMPLEMENTED  
+**Automated CI/tests:** TESTED  
+**Security/CodeQL:** TESTED  
+**AWS infrastructure:** IMPLEMENTED  
+**ECS Fargate deployment:** DEPLOYED  
+**AWS OIDC CI/CD:** DEPLOYED  
+**Watchlist dev provider:** TESTED + DEPLOYED  
 **Production readiness:** NOT CLAIMED
+
+The current development environment has an end-to-end deployment verification path that checks ECS rollout, API liveness/readiness, deterministic watchlist decisions, and the unauthenticated write authorization boundary.
 
 ## Local development
 
