@@ -70,7 +70,6 @@ jobs:
           SECRET_JSON="$SECRET_JSON" python3 - <<'PY'
           import json
           import os
-          import sys
 
           raw = os.environ.get("SECRET_JSON", "")
           if not raw or raw == "None":
@@ -86,24 +85,30 @@ jobs:
                   f"misha-dev/application does not contain valid JSON: {exc}"
               ) from exc
 
-          required = (
-              "WatchlistProviderName",
-              "WatchlistBaseUrl",
-              "WatchlistEndpoint",
-              "WatchlistApiKey",
-          )
-          missing = [name for name in required if not str(secret.get(name, "")).strip()]
-          if missing:
-              raise SystemExit(
-                  "misha-dev/application is missing required watchlist fields: "
-                  + ", ".join(missing)
-              )
+          provider = str(secret.get("WatchlistProviderName", "")).strip()
+          if not provider:
+              raise SystemExit("WatchlistProviderName is required.")
 
-          base_url = str(secret["WatchlistBaseUrl"]).strip()
-          if not base_url.lower().startswith("https://"):
-              raise SystemExit("WatchlistBaseUrl must use HTTPS.")
+          api_key = str(secret.get("WatchlistApiKey", "")).strip()
+          if not api_key:
+              raise SystemExit("WatchlistApiKey is required.")
 
-          print("Watchlist runtime secret is present and structurally valid.")
+          if provider.lower() == "dev-mock":
+              print("Development watchlist mock configuration is present.")
+          else:
+              required = ("WatchlistBaseUrl", "WatchlistEndpoint")
+              missing = [name for name in required if not str(secret.get(name, "")).strip()]
+              if missing:
+                  raise SystemExit(
+                      "misha-dev/application is missing required watchlist fields: "
+                      + ", ".join(missing)
+                  )
+
+              base_url = str(secret["WatchlistBaseUrl"]).strip()
+              if not base_url.lower().startswith("https://"):
+                  raise SystemExit("WatchlistBaseUrl must use HTTPS.")
+
+              print("HTTP watchlist runtime secret is present and structurally valid.")
           PY
 
       - name: Login to Amazon ECR
