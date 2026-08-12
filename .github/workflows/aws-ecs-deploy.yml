@@ -26,6 +26,8 @@ env:
   ECS_SERVICE: misha-dev-api
   ECS_TASK_DEFINITION: misha-dev-api
   CONTAINER_NAME: api
+  COGNITO_USER_POOL_NAME: dev-misha
+  COGNITO_API_IDENTIFIER: https://misha-api
 
 jobs:
   deploy:
@@ -77,6 +79,39 @@ jobs:
           aws ecs describe-task-definition \
             --task-definition "$ECS_TASK_DEFINITION" \
             --query taskDefinition > task-definition.json
+
+      - name: Materialize Cognito authentication configuration
+        run: |
+          set -euo pipefail
+
+          USER_POOL_ID=$(aws cognito-idp list-user-pools \
+            --max-results 60 \
+            --query "UserPools[?Name=='${COGNITO_USER_POOL_NAME}'].Id | [0]" \
+            --output text)
+
+          test -n "$USER_POOL_ID" && test "$USER_POOL_ID" != "None" || {
+            echo "Cognito user pool '$COGNITO_USER_POOL_NAME' was not found."
+            exit 1
+          }
+
+          AUTHORITY="https://cognito-idp.${AWS_REGION}.amazonaws.com/${USER_POOL_ID}"
+
+          aws cognito-idp describe-resource-server \
+            --user-pool-id "$USER_POOL_ID" \
+            --identifier "$COGNITO_API_IDENTIFIER" >/dev/null
+
+          jq --arg authority "$AUTHORITY" \
+             --arg audience "$COGNITO_API_IDENTIFIER" \
+             --arg apiIdentifier "$COGNITO_API_IDENTIFIER" \
+             '.containerDefinitions |= map(if .name == "api" then .environment = ((.environment // []) | map(select(.name != "Authentication__Authority" and .name != "Authentication__Audience" and .name != "Authentication__ApiIdentifier")) + [{name:"Authentication__Authority",value:$authority},{name:"Authentication__Audience",value:$audience},{name:"Authentication__ApiIdentifier",value:$apiIdentifier}]) else . end)' \
+             task-definition.json > task-definition.auth.json
+
+          mv task-definition.auth.json task-definition.json
+
+          jq -e '.containerDefinitions[] | select(.name == "api") | any(.environment[]?; .name == "Authentication__Authority" and (.value | length > 0))' task-definition.json >/dev/null
+          jq -e '.containerDefinitions[] | select(.name == "api") | any(.environment[]?; .name == "Authentication__Audience" and (.value | length > 0))' task-definition.json >/dev/null
+
+          echo "Cognito authentication configuration is present in the task definition."
 
       - name: Render ECS task definition
         id: render
