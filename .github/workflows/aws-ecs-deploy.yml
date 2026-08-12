@@ -129,6 +129,46 @@ jobs:
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
 
+      - name: Verify deployed API health and authorization boundary
+        run: |
+          set -euo pipefail
+
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --names misha-dev-alb \
+            --query 'LoadBalancers[0].DNSName' \
+            --output text)
+          BASE_URL="http://${ALB_DNS}"
+
+          echo '=== LIVE ==='
+          curl --fail --silent --show-error --max-time 10 \
+            -D /tmp/live.headers -o /tmp/live.body \
+            "${BASE_URL}/health/live"
+          grep -q '^HTTP/.* 200 ' /tmp/live.headers
+
+          echo '=== READY ==='
+          curl --fail --silent --show-error --max-time 10 \
+            -D /tmp/ready.headers -o /tmp/ready.body \
+            "${BASE_URL}/health/ready"
+          grep -q '^HTTP/.* 200 ' /tmp/ready.headers
+
+          echo '=== UNAUTHENTICATED WRITE ==='
+          STATUS=$(curl --silent --show-error --max-time 10 \
+            -o /tmp/unauth.body -w '%{http_code}' \
+            -X POST "${BASE_URL}/applications" \
+            -H 'Content-Type: application/json' \
+            --data '{"applicantReference":"ci-unauthenticated-test"}')
+
+          case "$STATUS" in
+            401|403) echo "Authorization boundary enforced: HTTP $STATUS" ;;
+            *)
+              echo "Expected unauthenticated POST /applications to return 401 or 403, got HTTP $STATUS"
+              cat /tmp/unauth.body
+              exit 1
+              ;;
+          esac
+
+          echo '=== DEPLOYED SECURITY SMOKE TESTS PASSED ==='
+
       - name: Capture ECS deployment diagnostics
         if: always()
         run: |
