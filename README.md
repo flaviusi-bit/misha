@@ -36,7 +36,7 @@ Misha/
 │   └── Misha.Worker/
 ├── tests/
 │   └── Misha.Domain.Tests/
-├── infra/
+├── infrastructure/
 │   └── terraform/
 └── .github/
     └── workflows/
