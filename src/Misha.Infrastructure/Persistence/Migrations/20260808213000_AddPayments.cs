@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Misha.Infrastructure.Persistence.Migrations;
 
+[Migration("20260808213000_AddPayments")]
 public partial class AddPayments : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
