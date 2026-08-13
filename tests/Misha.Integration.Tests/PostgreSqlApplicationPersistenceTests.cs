@@ -8,8 +8,7 @@ namespace Misha.Integration.Tests;
 
 public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
-        .WithImage("postgres:17-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("misha_test")
         .WithUsername("misha")
         .WithPassword("misha_test_password")
