@@ -1,9 +1,11 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Misha.Infrastructure.Persistence.Migrations;
 
+[DbContext(typeof(MishaDbContext))]
 [Migration("20260810000000_AddManualReviewCases")]
 public partial class AddManualReviewCases : Migration
 {
