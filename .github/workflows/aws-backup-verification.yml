@@ -1,0 +1,127 @@
+name: AWS Backup Verification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 3 * * 1'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify-backup:
+    runs-on: ubuntu-latest
+    environment: aws-dev
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate deployment role configuration
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          test -n "$AWS_DEPLOY_ROLE_ARN" || {
+            echo "AWS_DEPLOY_ROLE_ARN repository variable is not configured."
+            exit 1
+          }
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubActionsBackupVerification
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Verify backup vault
+        env:
+          BACKUP_VAULT_NAME: misha-aws-dev-backup
+        run: |
+          set -euo pipefail
+          aws backup describe-backup-vault \
+            --backup-vault-name "$BACKUP_VAULT_NAME" \
+            --query '{Name:BackupVaultName,Arn:BackupVaultArn,RecoveryPoints:NumberOfRecoveryPoints}' \
+            --output table
+
+      - name: Verify backup plan and selection
+        env:
+          BACKUP_PLAN_NAME: misha-aws-dev-backup-plan
+        run: |
+          set -euo pipefail
+
+          PLAN_JSON="$(aws backup list-backup-plans \
+            --include-deleted=false \
+            --query "BackupPlansList[?BackupPlanName=='${BACKUP_PLAN_NAME}'] | [0]" \
+            --output json)"
+
+          test "$PLAN_JSON" != "null" || {
+            echo "Backup plan '$BACKUP_PLAN_NAME' was not found."
+            exit 1
+          }
+
+          PLAN_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["BackupPlanId"])' <<<"$PLAN_JSON")"
+          echo "Backup plan: $PLAN_ID"
+
+          SELECTIONS="$(aws backup list-backup-selections-by-backup-plan-id \
+            --backup-plan-id "$PLAN_ID" \
+            --output json)"
+
+          python3 - "$SELECTIONS" <<'PY'
+          import json
+          import sys
+
+          selections = json.loads(sys.argv[1]).get("BackupSelectionsList", [])
+          if not selections:
+              raise SystemExit("Backup plan has no backup selections.")
+
+          print(f"Backup selections: {len(selections)}")
+          for selection in selections:
+              print(f"- {selection['SelectionId']}: {selection['SelectionName']}")
+          PY
+
+      - name: Verify latest recovery point freshness
+        env:
+          BACKUP_VAULT_NAME: misha-aws-dev-backup
+        run: |
+          set -euo pipefail
+
+          RECOVERY_POINTS="$(aws backup list-recovery-points-by-backup-vault \
+            --backup-vault-name "$BACKUP_VAULT_NAME" \
+            --query 'RecoveryPoints[?Status==`COMPLETED`] | sort_by(@, &CreationDate)' \
+            --output json)"
+
+          python3 - "$RECOVERY_POINTS" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+
+          points = json.loads(sys.argv[1])
+          if not points:
+              raise SystemExit("No COMPLETED AWS Backup recovery point exists.")
+
+          latest = points[-1]
+          created = latest.get("CreationDate")
+          if not created:
+              raise SystemExit("Latest recovery point has no CreationDate.")
+
+          created_at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+          age_hours = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
+
+          print(f"Latest recovery point: {latest.get('RecoveryPointArn')}")
+          print(f"Created: {created_at.isoformat()}")
+          print(f"Age: {age_hours:.2f} hours")
+
+          if age_hours > 26:
+              raise SystemExit("Latest completed recovery point is older than 26 hours.")
+          PY
+
+      - name: Backup verification summary
+        run: |
+          echo "AWS Backup verification passed for aws-dev."
+          echo "Vault, backup plan, backup selection and recent recovery point are present."
+          echo "This workflow is read-only and does not perform a restore or mutate AWS resources."
