@@ -13,91 +13,91 @@ public partial class AddManualReviewCases : Migration
     {
         migrationBuilder.Sql("""
             CREATE TABLE IF NOT EXISTS manual_review_cases (
-                id uuid NOT NULL,
-                application_id uuid NOT NULL,
-                status varchar(32),
-                trigger varchar(100),
-                reason varchar(2000),
-                created_at_utc timestamp with time zone,
-                assigned_to_actor_reference varchar(200),
-                assigned_at_utc timestamp with time zone,
-                resolution varchar(32),
-                resolution_reason varchar(2000),
-                resolved_by_actor_reference varchar(200),
-                resolved_at_utc timestamp with time zone,
-                CONSTRAINT pk_manual_review_cases PRIMARY KEY (id),
-                CONSTRAINT fk_manual_review_cases_applications FOREIGN KEY (application_id)
-                    REFERENCES applications (id)
+                "Id" uuid NOT NULL,
+                "ApplicationId" uuid NOT NULL,
+                "Status" varchar(32),
+                "Trigger" varchar(100),
+                "Reason" varchar(2000),
+                "CreatedAtUtc" timestamp with time zone,
+                "AssignedToActorReference" varchar(200),
+                "AssignedAtUtc" timestamp with time zone,
+                "Resolution" varchar(32),
+                "ResolutionReason" varchar(2000),
+                "ResolvedByActorReference" varchar(200),
+                "ResolvedAtUtc" timestamp with time zone,
+                CONSTRAINT "PK_manual_review_cases" PRIMARY KEY ("Id"),
+                CONSTRAINT "FK_manual_review_cases_applications" FOREIGN KEY ("ApplicationId")
+                    REFERENCES applications ("Id")
                     ON DELETE RESTRICT
             );
 
             ALTER TABLE manual_review_cases
-                ADD COLUMN IF NOT EXISTS status varchar(32);
-            UPDATE manual_review_cases SET status = 'Pending' WHERE status IS NULL;
-            ALTER TABLE manual_review_cases ALTER COLUMN status SET NOT NULL;
+                ADD COLUMN IF NOT EXISTS "Status" varchar(32);
+            UPDATE manual_review_cases SET "Status" = 'Pending' WHERE "Status" IS NULL;
+            ALTER TABLE manual_review_cases ALTER COLUMN "Status" SET NOT NULL;
 
             ALTER TABLE manual_review_cases
-                ADD COLUMN IF NOT EXISTS trigger varchar(100);
-            UPDATE manual_review_cases SET trigger = 'Legacy' WHERE trigger IS NULL;
-            ALTER TABLE manual_review_cases ALTER COLUMN trigger SET NOT NULL;
+                ADD COLUMN IF NOT EXISTS "Trigger" varchar(100);
+            UPDATE manual_review_cases SET "Trigger" = 'Legacy' WHERE "Trigger" IS NULL;
+            ALTER TABLE manual_review_cases ALTER COLUMN "Trigger" SET NOT NULL;
 
             ALTER TABLE manual_review_cases
-                ADD COLUMN IF NOT EXISTS reason varchar(2000);
-            UPDATE manual_review_cases SET reason = 'Legacy manual review case' WHERE reason IS NULL;
-            ALTER TABLE manual_review_cases ALTER COLUMN reason SET NOT NULL;
+                ADD COLUMN IF NOT EXISTS "Reason" varchar(2000);
+            UPDATE manual_review_cases SET "Reason" = 'Legacy manual review case' WHERE "Reason" IS NULL;
+            ALTER TABLE manual_review_cases ALTER COLUMN "Reason" SET NOT NULL;
 
             ALTER TABLE manual_review_cases
-                ADD COLUMN IF NOT EXISTS created_at_utc timestamp with time zone;
-            UPDATE manual_review_cases SET created_at_utc = CURRENT_TIMESTAMP WHERE created_at_utc IS NULL;
-            ALTER TABLE manual_review_cases ALTER COLUMN created_at_utc SET NOT NULL;
+                ADD COLUMN IF NOT EXISTS "CreatedAtUtc" timestamp with time zone;
+            UPDATE manual_review_cases SET "CreatedAtUtc" = CURRENT_TIMESTAMP WHERE "CreatedAtUtc" IS NULL;
+            ALTER TABLE manual_review_cases ALTER COLUMN "CreatedAtUtc" SET NOT NULL;
 
             ALTER TABLE manual_review_cases
-                ADD COLUMN IF NOT EXISTS assigned_to_actor_reference varchar(200),
-                ADD COLUMN IF NOT EXISTS assigned_at_utc timestamp with time zone,
-                ADD COLUMN IF NOT EXISTS resolution varchar(32),
-                ADD COLUMN IF NOT EXISTS resolution_reason varchar(2000),
-                ADD COLUMN IF NOT EXISTS resolved_by_actor_reference varchar(200),
-                ADD COLUMN IF NOT EXISTS resolved_at_utc timestamp with time zone;
+                ADD COLUMN IF NOT EXISTS "AssignedToActorReference" varchar(200),
+                ADD COLUMN IF NOT EXISTS "AssignedAtUtc" timestamp with time zone,
+                ADD COLUMN IF NOT EXISTS "Resolution" varchar(32),
+                ADD COLUMN IF NOT EXISTS "ResolutionReason" varchar(2000),
+                ADD COLUMN IF NOT EXISTS "ResolvedByActorReference" varchar(200),
+                ADD COLUMN IF NOT EXISTS "ResolvedAtUtc" timestamp with time zone;
 
-            CREATE INDEX IF NOT EXISTS ix_manual_review_cases_status_created
-                ON manual_review_cases (status, created_at_utc);
-            CREATE INDEX IF NOT EXISTS ix_manual_review_cases_application
-                ON manual_review_cases (application_id, created_at_utc);
-            CREATE UNIQUE INDEX IF NOT EXISTS ux_manual_review_cases_open_application
-                ON manual_review_cases (application_id)
-                WHERE status IN ('Pending', 'InProgress');
+            CREATE INDEX IF NOT EXISTS "IX_manual_review_cases_Status_CreatedAtUtc"
+                ON manual_review_cases ("Status", "CreatedAtUtc");
+            CREATE INDEX IF NOT EXISTS "IX_manual_review_cases_ApplicationId_CreatedAtUtc"
+                ON manual_review_cases ("ApplicationId", "CreatedAtUtc");
+            CREATE UNIQUE INDEX IF NOT EXISTS "UX_manual_review_cases_open_application"
+                ON manual_review_cases ("ApplicationId")
+                WHERE "Status" IN ('Pending', 'InProgress');
             """);
 
         migrationBuilder.Sql("""
             CREATE TABLE IF NOT EXISTS notifications (
-                id uuid NOT NULL,
-                application_id uuid NOT NULL,
-                recipient_reference varchar(200) NOT NULL,
-                channel varchar(32) NOT NULL,
-                template varchar(100) NOT NULL,
-                payload text NOT NULL,
-                status varchar(32) NOT NULL,
-                attempts integer NOT NULL DEFAULT 0,
-                created_at_utc timestamp with time zone NOT NULL,
-                sent_at_utc timestamp with time zone,
-                last_attempt_at_utc timestamp with time zone,
-                last_error varchar(2000),
-                CONSTRAINT pk_notifications PRIMARY KEY (id),
-                CONSTRAINT fk_notifications_applications FOREIGN KEY (application_id)
-                    REFERENCES applications (id)
+                "Id" uuid NOT NULL,
+                "ApplicationId" uuid NOT NULL,
+                "RecipientReference" varchar(200) NOT NULL,
+                "Channel" varchar(32) NOT NULL,
+                "Template" varchar(100) NOT NULL,
+                "Payload" text NOT NULL,
+                "Status" varchar(32) NOT NULL,
+                "Attempts" integer NOT NULL DEFAULT 0,
+                "CreatedAtUtc" timestamp with time zone NOT NULL,
+                "SentAtUtc" timestamp with time zone,
+                "LastAttemptAtUtc" timestamp with time zone,
+                "LastError" varchar(2000),
+                CONSTRAINT "PK_notifications" PRIMARY KEY ("Id"),
+                CONSTRAINT "FK_notifications_applications" FOREIGN KEY ("ApplicationId")
+                    REFERENCES applications ("Id")
                     ON DELETE RESTRICT
             );
 
             ALTER TABLE notifications
-                ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0,
-                ADD COLUMN IF NOT EXISTS sent_at_utc timestamp with time zone,
-                ADD COLUMN IF NOT EXISTS last_attempt_at_utc timestamp with time zone,
-                ADD COLUMN IF NOT EXISTS last_error varchar(2000);
+                ADD COLUMN IF NOT EXISTS "Attempts" integer NOT NULL DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS "SentAtUtc" timestamp with time zone,
+                ADD COLUMN IF NOT EXISTS "LastAttemptAtUtc" timestamp with time zone,
+                ADD COLUMN IF NOT EXISTS "LastError" varchar(2000);
 
-            CREATE INDEX IF NOT EXISTS ix_notifications_status_created
-                ON notifications (status, created_at_utc);
-            CREATE INDEX IF NOT EXISTS ix_notifications_application_created
-                ON notifications (application_id, created_at_utc);
+            CREATE INDEX IF NOT EXISTS "IX_notifications_Status_CreatedAtUtc"
+                ON notifications ("Status", "CreatedAtUtc");
+            CREATE INDEX IF NOT EXISTS "IX_notifications_ApplicationId_CreatedAtUtc"
+                ON notifications ("ApplicationId", "CreatedAtUtc");
             """);
     }
 
