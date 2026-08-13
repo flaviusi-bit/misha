@@ -55,7 +55,6 @@ jobs:
           set -euo pipefail
 
           PLAN_JSON="$(aws backup list-backup-plans \
-            --include-deleted=false \
             --query "BackupPlansList[?BackupPlanName=='${BACKUP_PLAN_NAME}'] | [0]" \
             --output json)"
 
