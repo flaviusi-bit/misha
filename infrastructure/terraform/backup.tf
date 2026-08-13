@@ -1,8 +1,18 @@
+resource "terraform_data" "iam_policy_propagation" {
+  triggers_replace = [sha256(aws_iam_role_policy.github_actions_deploy.policy)]
+
+  depends_on = [aws_iam_role_policy.github_actions_deploy]
+
+  provisioner "local-exec" {
+    command = "sleep 20"
+  }
+}
+
 resource "aws_backup_vault" "application" {
   name          = "${local.name}-backup"
   force_destroy = var.environment != "prod"
 
-  depends_on = [aws_iam_role_policy.github_actions_deploy]
+  depends_on = [terraform_data.iam_policy_propagation]
 }
 
 resource "aws_iam_role" "backup" {
@@ -17,7 +27,7 @@ resource "aws_iam_role" "backup" {
     }]
   })
 
-  depends_on = [aws_iam_role_policy.github_actions_deploy]
+  depends_on = [terraform_data.iam_policy_propagation]
 }
 
 resource "aws_iam_role_policy_attachment" "backup" {
