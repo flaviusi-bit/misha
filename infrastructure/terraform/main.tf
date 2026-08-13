@@ -403,15 +403,12 @@ resource "aws_ecs_service" "api" {
   depends_on = [aws_lb_listener.http, aws_lb_listener.https]
 
   deployment_circuit_breaker {
-    enable  = true
+    enable   = true
     rollback = true
   }
 
   lifecycle {
     ignore_changes = [task_definition]
-  }
-
-  lifecycle {
     precondition {
       condition     = var.environment != "prod" || var.ecs_desired_count >= 2
       error_message = "Production requires at least two ECS API tasks for service availability during deployments."
