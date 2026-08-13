@@ -439,6 +439,7 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids      = [aws_security_group.rds.id]
   publicly_accessible         = false
   skip_final_snapshot         = var.environment != "prod"
+  final_snapshot_identifier   = var.environment == "prod" ? var.final_snapshot_identifier : null
   deletion_protection         = var.environment == "prod" ? true : var.enable_deletion_protection
   backup_retention_period     = var.environment == "prod" ? 7 : 1
 
@@ -446,6 +447,10 @@ resource "aws_db_instance" "postgres" {
     precondition {
       condition     = var.environment != "prod" || var.enable_deletion_protection
       error_message = "Production must explicitly enable database deletion protection."
+    }
+    precondition {
+      condition     = var.environment != "prod" || trimspace(var.final_snapshot_identifier) != ""
+      error_message = "Production requires a final_snapshot_identifier for the RDS final snapshot."
     }
   }
 }
