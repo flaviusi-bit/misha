@@ -27,6 +27,17 @@ resource "aws_iam_role_policy" "github_actions_backup_permissions" {
             "kms:ViaService" = "backup.eu-central-1.amazonaws.com"
           }
         }
+      },
+      {
+        Sid    = "AllowBackupVerificationRead"
+        Effect = "Allow"
+        Action = [
+          "backup:DescribeBackupVault",
+          "backup:ListBackupPlans",
+          "backup:ListBackupSelections",
+          "backup:ListRecoveryPointsByBackupVault"
+        ]
+        Resource = "*"
       }
     ]
   })
