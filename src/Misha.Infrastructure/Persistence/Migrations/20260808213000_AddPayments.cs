@@ -1,10 +1,12 @@
 using System;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
 namespace Misha.Infrastructure.Persistence.Migrations;
 
+[DbContext(typeof(MishaDbContext))]
 [Migration("20260808213000_AddPayments")]
 public partial class AddPayments : Migration
 {
