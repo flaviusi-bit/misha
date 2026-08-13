@@ -24,7 +24,7 @@ jobs:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
           test -n "$AWS_DEPLOY_ROLE_ARN" || {
-            echo "AWS_DEPLOY_ROLE_ARN repository variable is not configured."
+            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
             exit 1
           }
 
@@ -40,7 +40,7 @@ jobs:
 
       - name: Verify backup vault
         env:
-          BACKUP_VAULT_NAME: misha-aws-dev-backup
+          BACKUP_VAULT_NAME: misha-dev-backup
         run: |
           set -euo pipefail
           aws backup describe-backup-vault \
@@ -50,7 +50,7 @@ jobs:
 
       - name: Verify backup plan and selection
         env:
-          BACKUP_PLAN_NAME: misha-aws-dev-backup-plan
+          BACKUP_PLAN_NAME: misha-dev-backup-plan
         run: |
           set -euo pipefail
 
@@ -86,7 +86,7 @@ jobs:
 
       - name: Verify latest recovery point freshness
         env:
-          BACKUP_VAULT_NAME: misha-aws-dev-backup
+          BACKUP_VAULT_NAME: misha-dev-backup
         run: |
           set -euo pipefail
 
