@@ -17,4 +17,12 @@
     <ProjectReference Include="../../src/Misha.Application/Misha.Application.csproj" />
     <ProjectReference Include="../../src/Misha.Infrastructure/Misha.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Testcontainers 4.13.0 currently requires SSH.NET >= 2025.1.0.
+         GitHub/NuGet audit currently reports GHSA-q939-rpr3-3284 against that
+         transitive test-only dependency, while 2025.1.0 is the latest stable
+         SSH.NET release. Keep the audit suppression narrowly scoped until the
+         upstream dependency publishes a non-affected stable version. -->
+    <NuGetAuditSuppress Include="GHSA-q939-rpr3-3284" />
+  </ItemGroup>
 </Project>
