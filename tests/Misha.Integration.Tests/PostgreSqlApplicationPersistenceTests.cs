@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Misha.Application.Applications;
 using Misha.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
+using Xunit;
 
 namespace Misha.Integration.Tests;
 
