@@ -230,7 +230,10 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "backup:DeleteBackupSelection",
         "backup:GetBackupSelection",
         "backup:ListBackupSelections",
-        "backup:ListTags"
+        "backup:ListTags",
+        "backup:PutBackupVaultAccessPolicy",
+        "backup:DeleteBackupVaultAccessPolicy",
+        "backup:GetBackupVaultAccessPolicy"
       ], Resource = "*" },
       { Effect = "Allow", Action = [
         "iam:GetRole",
@@ -250,7 +253,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         aws_iam_role.github_actions_deploy.arn,
         aws_iam_role.ecs_execution.arn,
         aws_iam_role.ecs_task.arn,
-        aws_iam_role.backup.arn
+        "arn:aws:iam::576984879588:role/${local.name}-backup"
       ] },
       { Effect = "Allow", Action = ["iam:CreateOpenIDConnectProvider"], Resource = "*" },
       { Effect = "Allow", Action = [
@@ -260,7 +263,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "iam:RemoveClientIDFromOpenIDConnectProvider",
         "iam:UpdateOpenIDConnectProviderThumbprint"
       ], Resource = aws_iam_openid_connect_provider.github_actions.arn },
-      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn, aws_iam_role.backup.arn] },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn, "arn:aws:iam::576984879588:role/${local.name}-backup"] },
       { Effect = "Allow", Action = [
         "elasticloadbalancing:Describe*",
         "elasticloadbalancing:CreateLoadBalancer",
