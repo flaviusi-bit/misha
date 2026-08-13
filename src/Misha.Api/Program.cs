@@ -1,9 +1,11 @@
 using System.Threading.RateLimiting;
 using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.IdentityModel.Tokens;
 using Misha.Api;
 using Misha.Application.Applications;
 using Misha.Application.Documents;
@@ -64,7 +66,10 @@ Misha.Api.DecisionServiceRegistration.AddDecisionEngine(builder.Services);
 PaymentServiceRegistration.AddPaymentServices(builder.Services);
 EtaServiceRegistration.AddEtaServices(builder.Services, builder.Configuration);
 NotificationServiceRegistration.AddNotificationServices(builder.Services);
-builder.Services.AddHealthChecks().AddDbContextCheck<MishaDbContext>();
+
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "live" })
+    .AddDbContextCheck<MishaDbContext>("postgres", tags: new[] { "ready" });
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -127,8 +132,16 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
-app.MapHealthChecks("/health/live");
-app.MapHealthChecks("/health/ready");
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+}).AllowAnonymous();
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+}).AllowAnonymous();
+
 WatchlistSmokeEndpoints.Map(app);
 app.MapPaymentEndpoints();
 app.MapEtaEndpoints();
