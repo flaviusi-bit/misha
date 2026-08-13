@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
@@ -21,8 +22,8 @@
     <!-- Testcontainers 4.13.0 currently requires SSH.NET >= 2025.1.0.
          GitHub/NuGet audit currently reports GHSA-q939-rpr3-3284 against that
          transitive test-only dependency, while 2025.1.0 is the latest stable
-         SSH.NET release. Keep the audit suppression narrowly scoped until the
-         upstream dependency publishes a non-affected stable version. -->
+         SSH.NET release. Keep NU1903 narrowly scoped to this test project until
+         the upstream dependency publishes a non-affected stable version. -->
     <NuGetAuditSuppress Include="GHSA-q939-rpr3-3284" />
   </ItemGroup>
 </Project>
