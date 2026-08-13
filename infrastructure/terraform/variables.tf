@@ -77,6 +77,12 @@ variable "enable_deletion_protection" {
   default     = false
 }
 
+variable "final_snapshot_identifier" {
+  type        = string
+  description = "Final RDS snapshot identifier required for production database deletion."
+  default     = ""
+}
+
 variable "cognito_callback_urls" {
   type        = list(string)
   description = "OAuth2 authorization-code callback URLs for the MISHA web client."
