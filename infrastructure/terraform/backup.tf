@@ -1,5 +1,5 @@
 resource "aws_backup_vault" "application" {
-  name        = "${local.name}-backup"
+  name          = "${local.name}-backup"
   force_destroy = var.environment != "prod"
 }
 
