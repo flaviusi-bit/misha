@@ -1,6 +1,8 @@
 resource "aws_backup_vault" "application" {
   name          = "${local.name}-backup"
   force_destroy = var.environment != "prod"
+
+  depends_on = [aws_iam_role_policy.github_actions_deploy]
 }
 
 resource "aws_iam_role" "backup" {
@@ -14,6 +16,8 @@ resource "aws_iam_role" "backup" {
       Action    = "sts:AssumeRole"
     }]
   })
+
+  depends_on = [aws_iam_role_policy.github_actions_deploy]
 }
 
 resource "aws_iam_role_policy_attachment" "backup" {
