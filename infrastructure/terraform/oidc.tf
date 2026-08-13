@@ -132,7 +132,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "s3:GetObject",
         "s3:PutObject",
         "s3:DeleteObject"
-        ], Resource = [
+      ], Resource = [
         "arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate",
         "arn:aws:s3:::misha-terraform-state/misha/dev/terraform.tfstate.tflock"
       ] },
@@ -158,7 +158,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "sqs:SetQueueAttributes",
         "sqs:TagQueue",
         "sqs:UntagQueue"
-        ], Resource = [
+      ], Resource = [
         "arn:aws:sqs:eu-central-1:576984879588:misha-dev-application-events",
         "arn:aws:sqs:eu-central-1:576984879588:misha-dev-application-events-dlq"
       ] },
@@ -214,6 +214,24 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "route53:GetChange"
       ], Resource = "*" },
       { Effect = "Allow", Action = [
+        "backup:CreateBackupVault",
+        "backup:DeleteBackupVault",
+        "backup:DescribeBackupVault",
+        "backup:ListBackupVaults",
+        "backup:TagResource",
+        "backup:UntagResource",
+        "backup:CreateBackupPlan",
+        "backup:DeleteBackupPlan",
+        "backup:GetBackupPlan",
+        "backup:ListBackupPlans",
+        "backup:UpdateBackupPlan",
+        "backup:CreateBackupSelection",
+        "backup:DeleteBackupSelection",
+        "backup:GetBackupSelection",
+        "backup:ListBackupSelections",
+        "backup:ListTags"
+      ], Resource = "*" },
+      { Effect = "Allow", Action = [
         "iam:GetRole",
         "iam:CreateRole",
         "iam:DeleteRole",
@@ -227,10 +245,11 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "iam:ListAttachedRolePolicies",
         "iam:TagRole",
         "iam:UntagRole"
-        ], Resource = [
+      ], Resource = [
         aws_iam_role.github_actions_deploy.arn,
         aws_iam_role.ecs_execution.arn,
-        aws_iam_role.ecs_task.arn
+        aws_iam_role.ecs_task.arn,
+        aws_iam_role.backup.arn
       ] },
       { Effect = "Allow", Action = ["iam:CreateOpenIDConnectProvider"], Resource = "*" },
       { Effect = "Allow", Action = [
@@ -240,7 +259,11 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "iam:RemoveClientIDFromOpenIDConnectProvider",
         "iam:UpdateOpenIDConnectProviderThumbprint"
       ], Resource = aws_iam_openid_connect_provider.github_actions.arn },
-      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn] },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [
+        aws_iam_role.ecs_execution.arn,
+        aws_iam_role.ecs_task.arn,
+        aws_iam_role.backup.arn
+      ] },
       { Effect = "Allow", Action = [
         "elasticloadbalancing:Describe*",
         "elasticloadbalancing:CreateLoadBalancer",
