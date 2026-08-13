@@ -329,6 +329,13 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
 
+  lifecycle {
+    precondition {
+      condition     = var.environment != "prod" || local.tls_enabled
+      error_message = "Production requires a configured domain and Route53 zone so the public API is HTTPS-only."
+    }
+  }
+
   dynamic "default_action" {
     for_each = local.tls_enabled ? [1] : []
     content {
@@ -395,8 +402,20 @@ resource "aws_ecs_service" "api" {
   }
   depends_on = [aws_lb_listener.http, aws_lb_listener.https]
 
+  deployment_circuit_breaker {
+    enable  = true
+    rollback = true
+  }
+
   lifecycle {
     ignore_changes = [task_definition]
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.environment != "prod" || var.ecs_desired_count >= 2
+      error_message = "Production requires at least two ECS API tasks for service availability during deployments."
+    }
   }
 }
 
@@ -422,7 +441,14 @@ resource "aws_db_instance" "postgres" {
   db_subnet_group_name        = aws_db_subnet_group.this.name
   vpc_security_group_ids      = [aws_security_group.rds.id]
   publicly_accessible         = false
-  skip_final_snapshot         = true
-  deletion_protection         = var.enable_deletion_protection
-  backup_retention_period     = 1
+  skip_final_snapshot         = var.environment != "prod"
+  deletion_protection         = var.environment == "prod" ? true : var.enable_deletion_protection
+  backup_retention_period     = var.environment == "prod" ? 7 : 1
+
+  lifecycle {
+    precondition {
+      condition     = var.environment != "prod" || var.enable_deletion_protection
+      error_message = "Production must explicitly enable database deletion protection."
+    }
+  }
 }
