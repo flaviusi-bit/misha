@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Misha.Application.Messaging;
 
 public sealed class EventDispatcher(
@@ -30,8 +28,7 @@ public sealed class EventDispatcher(
         if (!handlers.TryGetValue(eventType, out var handler))
         {
             throw new InvalidOperationException(
-                string.Create(CultureInfo.InvariantCulture,
-                    $"No event handler is registered for event type '{eventType}'."));
+                $"No event handler is registered for event type '{eventType}'.");
         }
 
         return await idempotencyStore.ExecuteOnceAsync(
