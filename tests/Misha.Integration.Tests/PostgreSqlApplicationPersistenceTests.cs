@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Applications;
 using Misha.Infrastructure.Persistence;
@@ -97,7 +98,8 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         Assert.Equal("watchlist match", refusalAudit.Reason);
         Assert.Equal("actor-refusal", refusalAudit.ActorReference);
         Assert.Contains("watchlist match", refusalEvent.Payload);
-        Assert.Contains("\"ToStatus\":\"Refused\"", refusalEvent.Payload);
+        using var payload = JsonDocument.Parse(refusalEvent.Payload);
+        Assert.Equal("Refused", payload.RootElement.GetProperty("ToStatus").GetString());
     }
 
     [Fact]
