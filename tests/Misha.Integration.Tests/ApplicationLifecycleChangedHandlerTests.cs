@@ -5,6 +5,8 @@ using Misha.Domain.Applications;
 using Misha.Domain.Notifications;
 using Xunit;
 
+using DomainApplication = Misha.Domain.Applications.Application;
+
 namespace Misha.Integration.Tests;
 
 public sealed class ApplicationLifecycleChangedHandlerTests
@@ -12,7 +14,7 @@ public sealed class ApplicationLifecycleChangedHandlerTests
     [Fact]
     public async Task Handler_creates_pending_notification_for_application_lifecycle_event()
     {
-        var application = Application.Create("applicant-123");
+        var application = DomainApplication.Create("applicant-123");
         var applications = new RecordingApplicationRepository(application);
         var notifications = new RecordingNotificationRepository();
         var handler = new ApplicationLifecycleChangedHandler(applications, notifications);
@@ -32,15 +34,15 @@ public sealed class ApplicationLifecycleChangedHandlerTests
         Assert.True(notifications.Saved);
     }
 
-    private sealed class RecordingApplicationRepository(Application application) : IApplicationRepository
+    private sealed class RecordingApplicationRepository(DomainApplication application) : IApplicationRepository
     {
-        public Task<Application?> GetAsync(Guid id, CancellationToken cancellationToken) =>
-            Task.FromResult<Application?>(id == application.Id ? application : null);
+        public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult<DomainApplication?>(id == application.Id ? application : null);
 
-        public Task<Application?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken) =>
-            Task.FromResult<Application?>(null);
+        public Task<DomainApplication?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken) =>
+            Task.FromResult<DomainApplication?>(null);
 
-        public Task<Application> AddOrGetExistingAsync(Application value, CancellationToken cancellationToken) =>
+        public Task<DomainApplication> AddOrGetExistingAsync(DomainApplication value, CancellationToken cancellationToken) =>
             Task.FromResult(value);
 
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
