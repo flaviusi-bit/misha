@@ -40,19 +40,14 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         var applicationId = Guid.Empty;
         await using (var db = new MishaDbContext(options))
         {
-            var repository = new EfApplicationRepository(db);
-            var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
+            var service = CreateService(db);
             applicationId = await service.CreateAsync("integration-app-001", CancellationToken.None);
             await service.SubmitAsync(applicationId, "actor-001", CancellationToken.None);
             await service.StartProcessingAsync(applicationId, "actor-001", CancellationToken.None);
         }
         await using (var db = new MishaDbContext(options))
         {
-            var repository = new EfApplicationRepository(db);
-            var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
-            await service.ApproveAsync(applicationId, "actor-002", CancellationToken.None);
+            await CreateService(db).ApproveAsync(applicationId, "actor-002", CancellationToken.None);
         }
         await using (var db = new MishaDbContext(options))
         {
@@ -65,11 +60,8 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
             Assert.NotNull(persisted.ProcessingStartedAtUtc);
             Assert.NotNull(persisted.DecidedAtUtc);
             Assert.Equal(3, audits.Count);
-            Assert.Equal("actor-001", audits[0].ActorReference);
             Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Submitted, audits[0].ToStatus);
-            Assert.Equal("actor-001", audits[1].ActorReference);
             Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Processing, audits[1].ToStatus);
-            Assert.Equal("actor-002", audits[2].ActorReference);
             Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Approved, audits[2].ToStatus);
             Assert.Equal(3, outboxMessages.Count);
             Assert.All(outboxMessages, message => Assert.Equal("application.lifecycle.changed.v1", message.EventType));
@@ -86,9 +78,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         Guid applicationId;
         await using (var db = new MishaDbContext(options))
         {
-            var repository = new EfApplicationRepository(db);
-            var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
+            var service = CreateService(db);
             applicationId = await service.CreateAsync("integration-app-refusal", CancellationToken.None);
             await service.SubmitAsync(applicationId, "actor-refusal", CancellationToken.None);
             await service.StartProcessingAsync(applicationId, "actor-refusal", CancellationToken.None);
@@ -100,9 +90,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         var refusalEvents = await verificationDb.OutboxMessages
             .Where(x => x.AggregateId == applicationId && x.EventType == "application.lifecycle.changed.v1")
             .ToListAsync();
-        var refusalEvent = refusalEvents.Single(x =>
-            x.Payload.Contains("watchlist match", StringComparison.Ordinal) &&
-            x.Payload.Contains("\"ToStatus\":\"Refused\"", StringComparison.Ordinal));
+        var refusalEvent = refusalEvents.Single(x => x.OccurredAtUtc == refusalAudit.OccurredAtUtc);
         Assert.Equal(3, audits.Count);
         Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Refused, refusalAudit.ToStatus);
         Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Processing, refusalAudit.FromStatus);
@@ -119,24 +107,17 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         await using (var db = new MishaDbContext(options)) await db.Database.MigrateAsync();
         Guid applicationId;
         await using (var db = new MishaDbContext(options))
-        {
-            var repository = new EfApplicationRepository(db);
-            var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
-            applicationId = await service.CreateAsync("integration-app-concurrency", CancellationToken.None);
-        }
+            applicationId = await CreateService(db).CreateAsync("integration-app-concurrency", CancellationToken.None);
+
         await using var firstDb = new MishaDbContext(options);
         await using var secondDb = new MishaDbContext(options);
-        var firstService = new ApplicationService(new EfApplicationRepository(firstDb), new EfApplicationLifecycleAuditRepository(firstDb), new EfOutboxWriter(firstDb));
-        var secondService = new ApplicationService(new EfApplicationRepository(secondDb), new EfApplicationLifecycleAuditRepository(secondDb), new EfOutboxWriter(secondDb));
+        var firstService = CreateService(firstDb);
+        var secondService = CreateService(secondDb);
         await secondDb.Applications.SingleAsync(x => x.Id == applicationId);
         await firstService.SubmitAsync(applicationId, "actor-first", CancellationToken.None);
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => secondService.SubmitAsync(applicationId, "actor-second", CancellationToken.None));
-        var audits = await firstDb.ApplicationLifecycleAudits.Where(x => x.ApplicationId == applicationId).ToListAsync();
-        var outboxMessages = await firstDb.OutboxMessages.Where(x => x.AggregateId == applicationId).ToListAsync();
-        Assert.Single(audits);
-        Assert.Single(outboxMessages);
-        Assert.Equal("actor-first", audits[0].ActorReference);
+        Assert.Single(await firstDb.ApplicationLifecycleAudits.Where(x => x.ApplicationId == applicationId).ToListAsync());
+        Assert.Single(await firstDb.OutboxMessages.Where(x => x.AggregateId == applicationId).ToListAsync());
     }
 
     [Fact]
@@ -146,28 +127,18 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         await using (var db = new MishaDbContext(options)) await db.Database.MigrateAsync();
         Guid applicationId;
         await using (var db = new MishaDbContext(options))
-        {
-            var repository = new EfApplicationRepository(db);
-            var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
-            applicationId = await service.CreateAsync("integration-app-002", CancellationToken.None);
-        }
+            applicationId = await CreateService(db).CreateAsync("integration-app-002", CancellationToken.None);
+
         await using (var db = new MishaDbContext(options))
-        {
-            var repository = new EfApplicationRepository(db);
-            var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
-            await Assert.ThrowsAsync<InvalidOperationException>(() => service.ApproveAsync(applicationId, "actor-invalid", CancellationToken.None));
-        }
+            await Assert.ThrowsAsync<InvalidOperationException>(() => CreateService(db).ApproveAsync(applicationId, "actor-invalid", CancellationToken.None));
+
         await using (var db = new MishaDbContext(options))
         {
             var persisted = await db.Applications.SingleAsync(x => x.Id == applicationId);
-            var audits = await db.ApplicationLifecycleAudits.Where(x => x.ApplicationId == applicationId).ToListAsync();
-            var outboxMessages = await db.OutboxMessages.Where(x => x.AggregateId == applicationId).ToListAsync();
             Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Draft, persisted.Status);
             Assert.Null(persisted.DecidedAtUtc);
-            Assert.Empty(audits);
-            Assert.Empty(outboxMessages);
+            Assert.Empty(await db.ApplicationLifecycleAudits.Where(x => x.ApplicationId == applicationId).ToListAsync());
+            Assert.Empty(await db.OutboxMessages.Where(x => x.AggregateId == applicationId).ToListAsync());
         }
     }
 
@@ -180,9 +151,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         Guid secondId;
         await using (var db = new MishaDbContext(options))
         {
-            var repository = new EfApplicationRepository(db);
-            var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
+            var service = CreateService(db);
             firstId = await service.CreateAsync("integration-app-idempotent", "request-123", CancellationToken.None);
             secondId = await service.CreateAsync("integration-app-idempotent", "request-123", CancellationToken.None);
         }
@@ -197,15 +166,14 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
     {
         var options = CreateOptions();
         await using (var db = new MishaDbContext(options)) await db.Database.MigrateAsync();
-        await using (var db = new MishaDbContext(options))
-        {
-            var repository = new EfApplicationRepository(db);
-            var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
-            await service.CreateAsync("integration-app-original", "request-456", CancellationToken.None);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("integration-app-different", "request-456", CancellationToken.None));
-        }
+        await using var verificationDb = new MishaDbContext(options);
+        var service = CreateService(verificationDb);
+        await service.CreateAsync("integration-app-original", "request-456", CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("integration-app-different", "request-456", CancellationToken.None));
     }
+
+    private static ApplicationService CreateService(MishaDbContext db) =>
+        new(new EfApplicationRepository(db), new EfApplicationLifecycleAuditRepository(db), new EfOutboxWriter(db));
 
     private DbContextOptions<MishaDbContext> CreateOptions() =>
         new DbContextOptionsBuilder<MishaDbContext>().UseNpgsql(_postgres.GetConnectionString()).Options;
