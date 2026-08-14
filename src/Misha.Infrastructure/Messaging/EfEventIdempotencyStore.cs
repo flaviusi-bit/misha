@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Messaging;
+using Misha.Infrastructure.Persistence;
 
 namespace Misha.Infrastructure.Messaging;
 
