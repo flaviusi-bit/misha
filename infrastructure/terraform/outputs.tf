@@ -34,6 +34,14 @@ output "ecs_api_service_name" {
   value = aws_ecs_service.api.name
 }
 
+output "ecs_worker_task_definition" {
+  value = aws_ecs_task_definition.worker.family
+}
+
+output "ecs_worker_service_name" {
+  value = aws_ecs_service.worker.name
+}
+
 output "api_load_balancer_dns_name" {
   value = aws_lb.api.dns_name
 }
@@ -66,6 +74,11 @@ output "github_actions_deploy_role_arn" {
 output "ecr_repository_url" {
   description = "ECR repository URL for the MISHA API image."
   value       = aws_ecr_repository.api.repository_url
+}
+
+output "worker_ecr_repository_url" {
+  description = "ECR repository URL for the MISHA worker image."
+  value       = aws_ecr_repository.worker.repository_url
 }
 
 output "cognito_user_pool_id" {
