@@ -5,6 +5,27 @@ resource "aws_ecr_repository" "worker" {
   image_scanning_configuration {
     scan_on_push = true
   }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "worker" {
+  repository = aws_ecr_repository.worker.name
+
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep the latest 20 worker images"
+      selection = {
+        tagStatus   = "any"
+        countType   = "imageCountMoreThan"
+        countNumber = 20
+      }
+      action = { type = "expire" }
+    }]
+  })
 }
 
 resource "aws_cloudwatch_log_group" "worker" {
