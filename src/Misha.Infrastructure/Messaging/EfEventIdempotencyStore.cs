@@ -26,10 +26,10 @@ public sealed class EfEventIdempotencyStore(MishaDbContext db) : IEventIdempoten
         if (inserted == 0)
         {
             var existingType = await db.Database.SqlQuery<string>($"""
-                SELECT event_type AS \"Value\"
+                SELECT event_type AS "Value"
                 FROM processed_events
                 WHERE event_id = {eventId}
-                LIMIT 1;
+                LIMIT 1
                 """).SingleAsync(cancellationToken);
 
             if (!string.Equals(existingType, eventType, StringComparison.Ordinal))
