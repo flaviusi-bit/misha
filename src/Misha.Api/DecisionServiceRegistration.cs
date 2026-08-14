@@ -14,6 +14,5 @@ public static class DecisionServiceRegistration
         services.AddScoped<IManualReviewRepository, EfManualReviewRepository>();
         services.AddScoped<DecisionService>();
         services.AddScoped<ManualReviewService>();
-        services.AddHostedService<DecisionAuditSchemaInitializer>();
     }
 }
