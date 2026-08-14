@@ -79,7 +79,12 @@ public sealed class DocumentServiceTests
         public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult<DomainApplication?>(id == existingId ? DomainApplication.Create("test") : null);
 
-        public Task AddAsync(DomainApplication application, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<DomainApplication?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken) =>
+            Task.FromResult<DomainApplication?>(null);
+
+        public Task<DomainApplication> AddOrGetExistingAsync(DomainApplication application, CancellationToken cancellationToken) =>
+            Task.FromResult(application);
+
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
