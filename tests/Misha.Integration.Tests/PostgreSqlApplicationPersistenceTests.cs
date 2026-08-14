@@ -100,7 +100,9 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         var refusalEvents = await verificationDb.OutboxMessages
             .Where(x => x.AggregateId == applicationId && x.EventType == "application.lifecycle.changed.v1")
             .ToListAsync();
-        var refusalEvent = Assert.Single(refusalEvents);
+        var refusalEvent = refusalEvents.Single(x =>
+            x.Payload.Contains("watchlist match", StringComparison.Ordinal) &&
+            x.Payload.Contains("\"ToStatus\":\"Refused\"", StringComparison.Ordinal));
         Assert.Equal(3, audits.Count);
         Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Refused, refusalAudit.ToStatus);
         Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Processing, refusalAudit.FromStatus);
