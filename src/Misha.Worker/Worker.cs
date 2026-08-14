@@ -10,20 +10,23 @@ public sealed class Worker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("MISHA outbox worker started.");
+        logger.LogInformation("MISHA event worker started.");
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
-                var dispatcher = scope.ServiceProvider.GetRequiredService<IOutboxDispatcher>();
-                var published = await dispatcher.DispatchPendingAsync(stoppingToken);
+                var outbox = scope.ServiceProvider.GetRequiredService<IOutboxDispatcher>();
+                var consumer = scope.ServiceProvider.GetRequiredService<ISqsMessageConsumer>();
+                var eventDispatcher = scope.ServiceProvider.GetRequiredService<EventDispatcher>();
 
-                if (published == 0)
-                {
-                    await Task.Delay(IdleDelay, stoppingToken);
-                }
+                await outbox.DispatchPendingAsync(stoppingToken);
+                await consumer.ConsumeOnceAsync(
+                    (message, token) => eventDispatcher.DispatchAsync(message, token),
+                    stoppingToken);
+
+                await Task.Delay(IdleDelay, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -31,11 +34,11 @@ public sealed class Worker(
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Outbox dispatch cycle failed.");
+                logger.LogError(exception, "Worker processing cycle failed.");
                 await Task.Delay(IdleDelay, stoppingToken);
             }
         }
 
-        logger.LogInformation("MISHA outbox worker stopped.");
+        logger.LogInformation("MISHA event worker stopped.");
     }
 }
