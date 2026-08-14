@@ -74,7 +74,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ecr:TagResource",
         "ecr:UntagResource",
         "ecr:UploadLayerPart"
-      ], Resource = [
+        ], Resource = [
         aws_ecr_repository.api.arn,
         aws_ecr_repository.worker.arn,
       ] },
@@ -175,7 +175,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "logs:DeleteRetentionPolicy",
         "logs:TagResource",
         "logs:UntagResource"
-      ], Resource = [
+        ], Resource = [
         "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/api",
         "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/worker"
       ] },
