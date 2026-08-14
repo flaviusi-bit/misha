@@ -42,6 +42,7 @@ builder.Services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
 builder.Services.AddScoped<IDocumentStorage>(sp => new S3DocumentStorage(sp.GetRequiredService<IAmazonS3>(), builder.Configuration["DocumentStorage:BucketName"] ?? string.Empty));
 builder.Services.AddScoped<IApplicationRepository, EfApplicationRepository>();
 builder.Services.AddScoped<IApplicationLifecycleAuditRepository, EfApplicationLifecycleAuditRepository>();
+builder.Services.AddScoped<Misha.Application.Messaging.IOutboxWriter, EfOutboxWriter>();
 builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactRepository>();
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();

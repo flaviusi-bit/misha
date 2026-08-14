@@ -76,8 +76,8 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("FileName").IsRequired().HasMaxLength(255).HasColumnType("character varying(255)");
             b.Property<string>("Sha256").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
             b.Property<long>("SizeBytes").HasColumnType("bigint");
-            b.Property<string>("StorageKey").IsRequired().HasMaxLength(500).HasColumnType("character varying(500)");
             b.Property<int>("DocumentType").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("StorageKey").IsRequired().HasMaxLength(500).HasColumnType("character varying(500)");
             b.HasKey("Id");
             b.HasIndex("ApplicationId", "CreatedAtUtc");
             b.HasIndex("Sha256");
@@ -209,6 +209,23 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("Status", "CreatedAtUtc");
             b.HasIndex("ApplicationId", "CreatedAtUtc");
             b.ToTable("notifications");
+        });
+
+        modelBuilder.Entity("Misha.Infrastructure.Persistence.OutboxMessage", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<string>("EventType").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<Guid>("AggregateId").HasColumnType("uuid");
+            b.Property<string>("Payload").IsRequired().HasColumnType("jsonb");
+            b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<DateTimeOffset?>("PublishedAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<int>("AttemptCount").HasColumnType("integer");
+            b.Property<DateTimeOffset?>("LastAttemptAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<string>("LastError").HasMaxLength(2000).HasColumnType("character varying(2000)");
+            b.HasKey("Id");
+            b.HasIndex("AggregateId", "OccurredAtUtc");
+            b.HasIndex("PublishedAtUtc", "OccurredAtUtc");
+            b.ToTable("outbox_messages");
         });
 
 #pragma warning restore 612, 618

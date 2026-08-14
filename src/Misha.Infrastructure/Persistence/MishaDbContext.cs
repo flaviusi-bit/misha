@@ -24,6 +24,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
     public DbSet<EtaAudit> EtaAudits => Set<EtaAudit>();
     public DbSet<ManualReviewCase> ManualReviewCases => Set<ManualReviewCase>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -159,5 +160,18 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         notification.Property(x => x.CreatedAtUtc).IsRequired();
         notification.HasIndex(x => new { x.Status, x.CreatedAtUtc });
         notification.HasIndex(x => new { x.ApplicationId, x.CreatedAtUtc });
+
+        var outbox = modelBuilder.Entity<OutboxMessage>();
+        outbox.ToTable("outbox_messages");
+        outbox.HasKey(x => x.Id);
+        outbox.Property(x => x.EventType).HasMaxLength(200).IsRequired();
+        outbox.Property(x => x.Payload).HasColumnType("jsonb").IsRequired();
+        outbox.Property(x => x.OccurredAtUtc).IsRequired();
+        outbox.Property(x => x.PublishedAtUtc);
+        outbox.Property(x => x.AttemptCount).IsRequired();
+        outbox.Property(x => x.LastAttemptAtUtc);
+        outbox.Property(x => x.LastError).HasMaxLength(2000);
+        outbox.HasIndex(x => new { x.PublishedAtUtc, x.OccurredAtUtc });
+        outbox.HasIndex(x => new { x.AggregateId, x.OccurredAtUtc });
     }
 }
