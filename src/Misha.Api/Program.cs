@@ -30,7 +30,9 @@ if (string.IsNullOrWhiteSpace(connectionString))
     var dbPassword = builder.Configuration["DB_PASSWORD"];
 
     if (string.IsNullOrWhiteSpace(dbHost) || string.IsNullOrWhiteSpace(dbName) || string.IsNullOrWhiteSpace(dbUser) || string.IsNullOrWhiteSpace(dbPassword))
+    {
         throw new InvalidOperationException("Database configuration is missing. Expected ConnectionStrings:Misha or ECS DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD settings.");
+    }
 
     connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword}";
 }
@@ -48,6 +50,7 @@ builder.Services.AddScoped<IWatchlistProvider>(sp =>
 {
     var configuration = sp.GetRequiredService<IConfiguration>();
     var providerName = configuration["Watchlist:ProviderName"]?.Trim();
+
     return string.Equals(providerName, "dev-mock", StringComparison.OrdinalIgnoreCase)
         ? new MockWatchlistProvider()
         : new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), configuration);
@@ -93,12 +96,19 @@ builder.Services.AddRateLimiter(options =>
 var cognitoAuthority = builder.Configuration["Authentication:Authority"];
 var cognitoAudience = builder.Configuration["Authentication:Audience"];
 var cognitoApiIdentifier = builder.Configuration["Authentication:ApiIdentifier"] ?? "https://misha-api";
-if (string.IsNullOrWhiteSpace(cognitoAuthority)) throw new InvalidOperationException("Authentication:Authority is required.");
+if (string.IsNullOrWhiteSpace(cognitoAuthority))
+{
+    throw new InvalidOperationException("Authentication:Authority is required.");
+}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
     options.Authority = cognitoAuthority;
     options.RequireHttpsMetadata = true;
+
+    // Cognito access tokens are the API credential. They carry `scope` and
+    // `client_id`, while the ID token carries the OIDC `aud` claim. Do not
+    // accept an ID token as an API bearer token by accident.
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -107,12 +117,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         ValidateIssuerSigningKey = true,
         NameClaimType = "username",
     };
+
     options.Events = new JwtBearerEvents
     {
         OnTokenValidated = context =>
         {
             var tokenUse = context.Principal?.FindFirst("token_use")?.Value;
-            if (!string.Equals(tokenUse, "access", StringComparison.Ordinal)) context.Fail("Only Cognito access tokens may be used to call the API.");
+            if (!string.Equals(tokenUse, "access", StringComparison.Ordinal))
+            {
+                context.Fail("Only Cognito access tokens may be used to call the API.");
+            }
+
             return Task.CompletedTask;
         }
     };
@@ -166,29 +181,72 @@ app.MapPost("/applications", async (CreateApplicationRequest request, HttpReques
 app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service, CancellationToken ct) =>
 {
     var application = await service.GetAsync(id, ct);
-    return application is null ? Results.NotFound() : Results.Ok(new ApplicationResponse(application.Id, application.ApplicantReference, application.Status.ToString(), application.CreatedAtUtc, application.SubmittedAtUtc, application.ProcessingStartedAtUtc, application.DecidedAtUtc, application.CancelledAtUtc, application.RefusalReason));
+    return application is null
+        ? Results.NotFound()
+        : Results.Ok(new ApplicationResponse(
+            application.Id,
+            application.ApplicantReference,
+            application.Status.ToString(),
+            application.CreatedAtUtc,
+            application.SubmittedAtUtc,
+            application.ProcessingStartedAtUtc,
+            application.DecidedAtUtc,
+            application.CancelledAtUtc,
+            application.RefusalReason));
 }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
-app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
-app.MapPost("/applications/{id:guid}/process", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-app.MapPost("/applications/{id:guid}/refuse", async (Guid id, RefuseApplicationRequest request, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) =>
+    await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
-app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) => (await service.GetAsync(id, ct)).Select(ToDocumentResponse)).RequireAuthorization(AuthorizationPolicies.ApiRead);
+app.MapPost("/applications/{id:guid}/process", async (Guid id, ApplicationService service, CancellationToken ct) =>
+    await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
-app.MapPost("/applications/{id:guid}/documents", async (Guid id, DocumentRequest request, DocumentService service, CancellationToken ct) =>
+app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationService service, CancellationToken ct) =>
+    await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+
+app.MapPost("/applications/{id:guid}/refuse", async (
+    Guid id,
+    RefuseApplicationRequest request,
+    ApplicationService service,
+    CancellationToken ct) =>
+    await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+
+app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) =>
+    await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+
+app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) =>
+{
+    var documents = await service.GetAsync(id, ct);
+    return Results.Ok(documents.Select(ToDocumentResponse));
+}).RequireAuthorization(AuthorizationPolicies.ApiRead);
+
+app.MapPost("/applications/{id:guid}/documents", async (
+    Guid id,
+    DocumentRequest request,
+    DocumentService service,
+    CancellationToken ct) =>
 {
     try
     {
         var document = await service.RegisterAsync(id, request.DocumentType, request.FileName, request.ContentType, request.SizeBytes, request.Sha256, request.StorageKey, ct);
         return Results.Created($"/applications/{id}/documents", ToDocumentResponse(document));
     }
-    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
-    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
 }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
-app.MapPost("/applications/{id:guid}/documents/upload", async (Guid id, [FromForm] DocumentType documentType, [FromForm] IFormFile file, DocumentService service, CancellationToken ct) =>
+app.MapPost("/applications/{id:guid}/documents/upload", async (
+    Guid id,
+    [FromForm] DocumentType documentType,
+    [FromForm] IFormFile file,
+    DocumentService service,
+    CancellationToken ct) =>
 {
     try
     {
@@ -196,8 +254,14 @@ app.MapPost("/applications/{id:guid}/documents/upload", async (Guid id, [FromFor
         var document = await service.UploadAsync(id, documentType, file.FileName, file.ContentType, file.OpenReadStream(), ct);
         return Results.Created($"/applications/{id}/documents", ToDocumentResponse(document));
     }
-    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
-    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
 }).DisableAntiforgery().RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapPost("/applications/{id:guid}/passport", async (Guid id, PassportRequest request, PassportService service, CancellationToken ct) =>
@@ -209,13 +273,32 @@ app.MapPost("/applications/{id:guid}/passport", async (Guid id, PassportRequest 
 app.MapGet("/applications/{id:guid}/passport", async (Guid id, PassportService service, CancellationToken ct) =>
 {
     var passport = await service.GetAsync(id, ct);
-    return passport is null ? Results.NotFound() : Results.Ok(new PassportResponse(passport.Id, passport.ApplicationId, passport.DocumentNumber, passport.IssuingCountry, passport.Surname, passport.GivenNames, passport.DateOfBirth, passport.Nationality, passport.ExpiryDate, passport.IsExpired(DateOnly.FromDateTime(DateTime.UtcNow))));
+    return passport is null
+        ? Results.NotFound()
+        : Results.Ok(new PassportResponse(
+            passport.Id,
+            passport.ApplicationId,
+            passport.DocumentNumber,
+            passport.IssuingCountry,
+            passport.Surname,
+            passport.GivenNames,
+            passport.DateOfBirth,
+            passport.Nationality,
+            passport.ExpiryDate,
+            passport.IsExpired(DateOnly.FromDateTime(DateTime.UtcNow))));
 }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
 app.MapPost("/applications/{id:guid}/passport/verify", async (Guid id, PassportVerificationService service, CancellationToken ct) =>
 {
-    try { var result = await service.VerifyAsync(id, ct); return Results.Ok(new PassportVerificationResponse(result.Decision.ToString(), result.Reference, result.ErrorMessage)); }
-    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
+    try
+    {
+        var result = await service.VerifyAsync(id, ct);
+        return Results.Ok(new PassportVerificationResponse(result.Decision.ToString(), result.Reference, result.ErrorMessage));
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
 }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.MapPost("/applications/{id:guid}/watchlist/screen", async (Guid id, WatchlistService service, CancellationToken ct) =>
@@ -227,24 +310,47 @@ app.MapPost("/applications/{id:guid}/watchlist/screen", async (Guid id, Watchlis
 app.MapGet("/applications/{id:guid}/watchlist", async (Guid id, WatchlistService service, CancellationToken ct) =>
 {
     var check = await service.GetLatestAsync(id, ct);
-    return check is null ? Results.NotFound() : Results.Ok(new WatchlistResponse(check.Id, check.ApplicationId, check.Provider, check.Decision.ToString(), check.MatchReference, check.ErrorMessage, check.CheckedAtUtc));
+    return check is null
+        ? Results.NotFound()
+        : Results.Ok(new WatchlistResponse(check.Id, check.ApplicationId, check.Provider, check.Decision.ToString(), check.MatchReference, check.ErrorMessage, check.CheckedAtUtc));
 }).RequireAuthorization(AuthorizationPolicies.DecisionRead);
 
 app.MapPost("/applications/{id:guid}/policy/evaluate", async (Guid id, PolicyService service, CancellationToken ct) =>
 {
-    try { var evaluation = await service.EvaluateAsync(id, ct); return Results.Ok(new PolicyEvaluationResponse(evaluation.Decision.ToString(), evaluation.Reasons)); }
-    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
+    try
+    {
+        var evaluation = await service.EvaluateAsync(id, ct);
+        return Results.Ok(new PolicyEvaluationResponse(evaluation.Decision.ToString(), evaluation.Reasons));
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
 }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.Run();
 
 static DocumentResponse ToDocumentResponse(Misha.Domain.Documents.DocumentArtifact document) => new(document.Id, document.ApplicationId, document.DocumentType.ToString(), document.FileName, document.ContentType, document.SizeBytes, document.Sha256, document.StorageKey, document.CreatedAtUtc);
+
 static async Task<IResult> ExecuteCommand(Func<Task> command)
 {
-    try { await command(); return Results.NoContent(); }
-    catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
-    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
-    catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    try
+    {
+        await command();
+        return Results.NoContent();
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
 }
 
 public sealed record CreateApplicationRequest(string ApplicantReference);
