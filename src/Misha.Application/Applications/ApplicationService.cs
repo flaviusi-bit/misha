@@ -1,10 +1,13 @@
+using System.Text.Json;
+using Misha.Application.Messaging;
 using Misha.Domain.Applications;
 
 namespace Misha.Application.Applications;
 
 public sealed class ApplicationService(
     IApplicationRepository repository,
-    IApplicationLifecycleAuditRepository lifecycleAudits)
+    IApplicationLifecycleAuditRepository lifecycleAudits,
+    IOutboxWriter outbox)
 {
     public async Task<Guid> CreateAsync(
         string applicantReference,
@@ -78,6 +81,26 @@ public sealed class ApplicationService(
             reason);
 
         await lifecycleAudits.AddAsync(audit, cancellationToken);
+
+        var eventId = Guid.NewGuid();
+        var occurredAtUtc = audit.OccurredAtUtc;
+        var lifecycleEvent = new ApplicationLifecycleChanged(
+            eventId,
+            application.Id,
+            fromStatus.ToString(),
+            application.Status.ToString(),
+            reason,
+            actorReference,
+            occurredAtUtc);
+
+        await outbox.AddAsync(
+            eventId,
+            "application.lifecycle.changed.v1",
+            application.Id,
+            JsonSerializer.Serialize(lifecycleEvent),
+            occurredAtUtc,
+            cancellationToken);
+
         await repository.SaveChangesAsync(cancellationToken);
     }
 

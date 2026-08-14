@@ -31,12 +31,14 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
             Assert.Contains("20260808000000_InitialCreate", migrations);
             Assert.Contains("20260814000000_AddApplicationIdempotency", migrations);
             Assert.Contains("20260814010000_AddApplicationLifecycleAudits", migrations);
+            Assert.Contains("20260814020000_AddOutboxMessages", migrations);
 
             var tables = await db.Database.SqlQueryRaw<string>(
                 "select table_name as \"Value\" from information_schema.tables where table_schema = 'public'").ToListAsync();
 
             Assert.Contains("applications", tables);
             Assert.Contains("application_lifecycle_audits", tables);
+            Assert.Contains("outbox_messages", tables);
             Assert.Contains("decision_audits", tables);
             Assert.Contains("watchlist_checks", tables);
         }
@@ -47,7 +49,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         {
             var repository = new EfApplicationRepository(db);
             var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits);
+            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
 
             applicationId = await service.CreateAsync("integration-app-001", CancellationToken.None);
             await service.SubmitAsync(applicationId, "actor-001", CancellationToken.None);
@@ -58,7 +60,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         {
             var repository = new EfApplicationRepository(db);
             var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits);
+            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
 
             await service.ApproveAsync(applicationId, "actor-002", CancellationToken.None);
         }
@@ -68,6 +70,10 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
             var persisted = await db.Applications.SingleAsync(x => x.Id == applicationId);
             var audits = await db.ApplicationLifecycleAudits
                 .Where(x => x.ApplicationId == applicationId)
+                .OrderBy(x => x.OccurredAtUtc)
+                .ToListAsync();
+            var outboxMessages = await db.OutboxMessages
+                .Where(x => x.AggregateId == applicationId)
                 .OrderBy(x => x.OccurredAtUtc)
                 .ToListAsync();
 
@@ -84,6 +90,11 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
             Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Processing, audits[1].ToStatus);
             Assert.Equal("actor-002", audits[2].ActorReference);
             Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Approved, audits[2].ToStatus);
+
+            Assert.Equal(3, outboxMessages.Count);
+            Assert.All(outboxMessages, message => Assert.Equal("application.lifecycle.changed.v1", message.EventType));
+            Assert.All(outboxMessages, message => Assert.Null(message.PublishedAtUtc));
+            Assert.All(outboxMessages, message => Assert.Equal(0, message.AttemptCount));
         }
     }
 
@@ -101,7 +112,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         {
             var repository = new EfApplicationRepository(db);
             var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits);
+            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
 
             applicationId = await service.CreateAsync("integration-app-refusal", CancellationToken.None);
             await service.SubmitAsync(applicationId, "actor-refusal", CancellationToken.None);
@@ -114,14 +125,16 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
             .Where(x => x.ApplicationId == applicationId)
             .OrderBy(x => x.OccurredAtUtc)
             .ToListAsync();
+        var refusalAudit = audits[^1];
+        var refusalEvent = await verificationDb.OutboxMessages
+            .SingleAsync(x => x.AggregateId == applicationId && x.EventType == "application.lifecycle.changed.v1" && x.Payload.Contains("watchlist match"));
 
         Assert.Equal(3, audits.Count);
-
-        var refusalAudit = audits[^1];
         Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Refused, refusalAudit.ToStatus);
         Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Processing, refusalAudit.FromStatus);
         Assert.Equal("watchlist match", refusalAudit.Reason);
         Assert.Equal("actor-refusal", refusalAudit.ActorReference);
+        Assert.Contains("\"ToStatus\":\"Refused\"", refusalEvent.Payload);
     }
 
     [Fact]
@@ -138,7 +151,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         {
             var repository = new EfApplicationRepository(db);
             var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits);
+            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
             applicationId = await service.CreateAsync("integration-app-concurrency", CancellationToken.None);
         }
 
@@ -147,13 +160,13 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
 
         var firstService = new ApplicationService(
             new EfApplicationRepository(firstDb),
-            new EfApplicationLifecycleAuditRepository(firstDb));
+            new EfApplicationLifecycleAuditRepository(firstDb),
+            new EfOutboxWriter(firstDb));
         var secondService = new ApplicationService(
             new EfApplicationRepository(secondDb),
-            new EfApplicationLifecycleAuditRepository(secondDb));
+            new EfApplicationLifecycleAuditRepository(secondDb),
+            new EfOutboxWriter(secondDb));
 
-        // Load the second copy before the first transaction changes the row. This creates
-        // the stale xmin concurrency token that the test is intended to exercise.
         await secondDb.Applications.SingleAsync(x => x.Id == applicationId);
 
         await firstService.SubmitAsync(applicationId, "actor-first", CancellationToken.None);
@@ -164,7 +177,11 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         var audits = await firstDb.ApplicationLifecycleAudits
             .Where(x => x.ApplicationId == applicationId)
             .ToListAsync();
+        var outboxMessages = await firstDb.OutboxMessages
+            .Where(x => x.AggregateId == applicationId)
+            .ToListAsync();
         Assert.Single(audits);
+        Assert.Single(outboxMessages);
         Assert.Equal("actor-first", audits[0].ActorReference);
     }
 
@@ -182,7 +199,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         {
             var repository = new EfApplicationRepository(db);
             var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits);
+            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
             applicationId = await service.CreateAsync("integration-app-002", CancellationToken.None);
         }
 
@@ -190,7 +207,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         {
             var repository = new EfApplicationRepository(db);
             var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits);
+            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 service.ApproveAsync(applicationId, "actor-invalid", CancellationToken.None));
@@ -202,10 +219,14 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
             var audits = await db.ApplicationLifecycleAudits
                 .Where(x => x.ApplicationId == applicationId)
                 .ToListAsync();
+            var outboxMessages = await db.OutboxMessages
+                .Where(x => x.AggregateId == applicationId)
+                .ToListAsync();
 
             Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Draft, persisted.Status);
             Assert.Null(persisted.DecidedAtUtc);
             Assert.Empty(audits);
+            Assert.Empty(outboxMessages);
         }
     }
 
@@ -224,7 +245,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         {
             var repository = new EfApplicationRepository(db);
             var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits);
+            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
 
             firstId = await service.CreateAsync("integration-app-idempotent", "request-123", CancellationToken.None);
             secondId = await service.CreateAsync("integration-app-idempotent", "request-123", CancellationToken.None);
@@ -234,6 +255,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
 
         await using var verificationDb = new MishaDbContext(options);
         Assert.Equal(1, await verificationDb.Applications.CountAsync(x => x.IdempotencyKey == "request-123"));
+        Assert.Empty(await verificationDb.OutboxMessages.Where(x => x.AggregateId == firstId).ToListAsync());
     }
 
     [Fact]
@@ -249,7 +271,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         {
             var repository = new EfApplicationRepository(db);
             var lifecycleAudits = new EfApplicationLifecycleAuditRepository(db);
-            var service = new ApplicationService(repository, lifecycleAudits);
+            var service = new ApplicationService(repository, lifecycleAudits, new EfOutboxWriter(db));
 
             await service.CreateAsync("integration-app-original", "request-456", CancellationToken.None);
 
