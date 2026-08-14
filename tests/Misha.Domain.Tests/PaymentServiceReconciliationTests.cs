@@ -83,7 +83,11 @@ public sealed class PaymentServiceReconciliationTests
         public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult<DomainApplication?>(null);
 
-        public Task AddAsync(DomainApplication application, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<DomainApplication?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken) =>
+            Task.FromResult<DomainApplication?>(null);
+
+        public Task<DomainApplication> AddOrGetExistingAsync(DomainApplication application, CancellationToken cancellationToken) =>
+            Task.FromResult(application);
 
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
