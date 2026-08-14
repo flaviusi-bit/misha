@@ -9,6 +9,8 @@ resource "aws_ecr_repository" "worker" {
   encryption_configuration {
     encryption_type = "AES256"
   }
+
+  depends_on = [aws_iam_role_policy.github_actions_worker_bootstrap]
 }
 
 resource "aws_ecr_lifecycle_policy" "worker" {
@@ -26,11 +28,15 @@ resource "aws_ecr_lifecycle_policy" "worker" {
       action = { type = "expire" }
     }]
   })
+
+  depends_on = [aws_iam_role_policy.github_actions_deploy]
 }
 
 resource "aws_cloudwatch_log_group" "worker" {
   name              = "/ecs/${local.name}/worker"
   retention_in_days = 30
+
+  depends_on = [aws_iam_role_policy.github_actions_worker_bootstrap]
 }
 
 resource "aws_iam_role" "ecs_worker_task" {
@@ -44,6 +50,8 @@ resource "aws_iam_role" "ecs_worker_task" {
       Action    = "sts:AssumeRole"
     }]
   })
+
+  depends_on = [aws_iam_role_policy.github_actions_worker_bootstrap]
 }
 
 resource "aws_iam_role_policy" "ecs_worker_task" {
@@ -104,6 +112,8 @@ resource "aws_ecs_task_definition" "worker" {
   lifecycle {
     ignore_changes = [container_definitions]
   }
+
+  depends_on = [aws_iam_role_policy.github_actions_deploy]
 }
 
 resource "aws_ecs_service" "worker" {
@@ -131,4 +141,6 @@ resource "aws_ecs_service" "worker" {
       error_message = "Production requires at least two ECS worker tasks for availability during deployments."
     }
   }
+
+  depends_on = [aws_iam_role_policy.github_actions_deploy]
 }
