@@ -1,16 +1,50 @@
+using Microsoft.EntityFrameworkCore;
 using Misha.Domain.Applications;
 
 namespace Misha.Application.Applications;
 
 public sealed class ApplicationService(IApplicationRepository repository)
 {
-    public async Task<Guid> CreateAsync(string applicantReference, CancellationToken cancellationToken)
+    public async Task<Guid> CreateAsync(string applicantReference, string? idempotencyKey, CancellationToken cancellationToken)
     {
-        var application = Misha.Domain.Applications.Application.Create(applicantReference);
+        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            var existing = await repository.GetByIdempotencyKeyAsync(idempotencyKey.Trim(), cancellationToken);
+            if (existing is not null)
+            {
+                if (!string.Equals(existing.ApplicantReference, applicantReference.Trim(), StringComparison.Ordinal))
+                    throw new InvalidOperationException("The idempotency key has already been used for a different application request.");
+
+                return existing.Id;
+            }
+        }
+
+        var application = Misha.Domain.Applications.Application.Create(applicantReference, idempotencyKey);
         await repository.AddAsync(application, cancellationToken);
-        await repository.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await repository.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException) when (!string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            var existing = await repository.GetByIdempotencyKeyAsync(idempotencyKey.Trim(), cancellationToken);
+            if (existing is not null)
+            {
+                if (!string.Equals(existing.ApplicantReference, applicantReference.Trim(), StringComparison.Ordinal))
+                    throw new InvalidOperationException("The idempotency key has already been used for a different application request.");
+
+                return existing.Id;
+            }
+
+            throw;
+        }
+
         return application.Id;
     }
+
+    public Task<Guid> CreateAsync(string applicantReference, CancellationToken cancellationToken) =>
+        CreateAsync(applicantReference, null, cancellationToken);
 
     public Task<Misha.Domain.Applications.Application?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         repository.GetAsync(id, cancellationToken);
