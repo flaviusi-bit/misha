@@ -74,7 +74,10 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ecr:TagResource",
         "ecr:UntagResource",
         "ecr:UploadLayerPart"
-      ], Resource = [aws_ecr_repository.api.arn, aws_ecr_repository.worker.arn] },
+      ], Resource = [
+        aws_ecr_repository.api.arn,
+        aws_ecr_repository.worker.arn,
+      ] },
       { Effect = "Allow", Action = [
         "ecs:DescribeClusters",
         "ecs:DescribeServices",
@@ -267,7 +270,12 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "iam:RemoveClientIDFromOpenIDConnectProvider",
         "iam:UpdateOpenIDConnectProviderThumbprint"
       ], Resource = aws_iam_openid_connect_provider.github_actions.arn },
-      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn, aws_iam_role.ecs_worker_task.arn, "arn:aws:iam::576984879588:role/${local.name}-backup"] },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [
+        aws_iam_role.ecs_execution.arn,
+        aws_iam_role.ecs_task.arn,
+        aws_iam_role.ecs_worker_task.arn,
+        "arn:aws:iam::576984879588:role/${local.name}-backup"
+      ] },
       { Effect = "Allow", Action = [
         "elasticloadbalancing:Describe*",
         "elasticloadbalancing:CreateLoadBalancer",
