@@ -41,6 +41,7 @@ builder.Services.AddDbContext<MishaDbContext>(options => options.UseNpgsql(conne
 builder.Services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
 builder.Services.AddScoped<IDocumentStorage>(sp => new S3DocumentStorage(sp.GetRequiredService<IAmazonS3>(), builder.Configuration["DocumentStorage:BucketName"] ?? string.Empty));
 builder.Services.AddScoped<IApplicationRepository, EfApplicationRepository>();
+builder.Services.AddScoped<IApplicationLifecycleAuditRepository, EfApplicationLifecycleAuditRepository>();
 builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactRepository>();
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
@@ -195,24 +196,33 @@ app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service
             application.RefusalReason));
 }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
-app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapGet("/applications/{id:guid}/lifecycle", async (Guid id, ApplicationService service, CancellationToken ct) =>
+{
+    var application = await service.GetAsync(id, ct);
+    return application is null
+        ? Results.NotFound()
+        : Results.Ok(await service.GetLifecycleAsync(id, ct));
+}).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
-app.MapPost("/applications/{id:guid}/process", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+app.MapPost("/applications/{id:guid}/submit", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) =>
+    await ExecuteCommand(() => service.SubmitAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
-app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+app.MapPost("/applications/{id:guid}/process", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) =>
+    await ExecuteCommand(() => service.StartProcessingAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+
+app.MapPost("/applications/{id:guid}/approve", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) =>
+    await ExecuteCommand(() => service.ApproveAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
 app.MapPost("/applications/{id:guid}/refuse", async (
     Guid id,
     RefuseApplicationRequest request,
+    HttpContext httpContext,
     ApplicationService service,
     CancellationToken ct) =>
-    await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+    await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
-app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) =>
-    await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapPost("/applications/{id:guid}/cancel", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) =>
+    await ExecuteCommand(() => service.CancelAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) =>
 {
@@ -330,7 +340,13 @@ app.MapPost("/applications/{id:guid}/policy/evaluate", async (Guid id, PolicySer
 
 app.Run();
 
-static DocumentResponse ToDocumentResponse(Misha.Domain.Documents.DocumentArtifact document) => new(document.Id, document.ApplicationId, document.DocumentType.ToString(), document.FileName, document.ContentType, document.SizeBytes, document.Sha256, document.StorageKey, document.CreatedAtUtc);
+static string GetActorReference(HttpContext httpContext) =>
+    httpContext.User.Identity?.Name
+    ?? httpContext.User.FindFirst("sub")?.Value
+    ?? throw new InvalidOperationException("Authenticated actor reference is missing.");
+
+static DocumentResponse ToDocumentResponse(Misha.Domain.Documents.DocumentArtifact document) =>
+    new(document.Id, document.ApplicationId, document.DocumentType.ToString(), document.FileName, document.ContentType, document.SizeBytes, document.Sha256, document.StorageKey, document.CreatedAtUtc);
 
 static async Task<IResult> ExecuteCommand(Func<Task> command)
 {
@@ -346,6 +362,10 @@ static async Task<IResult> ExecuteCommand(Func<Task> command)
     catch (ArgumentException ex)
     {
         return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (DbUpdateConcurrencyException)
+    {
+        return Results.Conflict(new { error = "The application was changed by another request. Reload it and retry the lifecycle operation." });
     }
     catch (InvalidOperationException ex)
     {
