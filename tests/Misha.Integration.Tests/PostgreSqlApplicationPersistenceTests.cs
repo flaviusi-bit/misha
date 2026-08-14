@@ -29,6 +29,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
 
             var migrations = await db.Database.GetAppliedMigrationsAsync();
             Assert.Contains("20260808000000_InitialCreate", migrations);
+            Assert.Contains("20260814000000_AddApplicationIdempotency", migrations);
 
             var tables = await db.Database.SqlQueryRaw<string>(
                 "select table_name as \"Value\" from information_schema.tables where table_schema = 'public'").ToListAsync();
@@ -101,6 +102,53 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
             var persisted = await db.Applications.SingleAsync(x => x.Id == applicationId);
             Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Draft, persisted.Status);
             Assert.Null(persisted.DecidedAtUtc);
+        }
+    }
+
+    [Fact]
+    public async Task Reusing_idempotency_key_returns_the_original_application()
+    {
+        var options = CreateOptions();
+        await using (var db = new MishaDbContext(options))
+        {
+            await db.Database.MigrateAsync();
+        }
+
+        Guid firstId;
+        Guid secondId;
+        await using (var db = new MishaDbContext(options))
+        {
+            var repository = new EfApplicationRepository(db);
+            var service = new ApplicationService(repository);
+
+            firstId = await service.CreateAsync("integration-app-idempotent", "request-123", CancellationToken.None);
+            secondId = await service.CreateAsync("integration-app-idempotent", "request-123", CancellationToken.None);
+        }
+
+        Assert.Equal(firstId, secondId);
+
+        await using var verificationDb = new MishaDbContext(options);
+        Assert.Equal(1, await verificationDb.Applications.CountAsync(x => x.IdempotencyKey == "request-123"));
+    }
+
+    [Fact]
+    public async Task Reusing_idempotency_key_for_different_request_is_rejected()
+    {
+        var options = CreateOptions();
+        await using (var db = new MishaDbContext(options))
+        {
+            await db.Database.MigrateAsync();
+        }
+
+        await using (var db = new MishaDbContext(options))
+        {
+            var repository = new EfApplicationRepository(db);
+            var service = new ApplicationService(repository);
+
+            await service.CreateAsync("integration-app-original", "request-456", CancellationToken.None);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.CreateAsync("integration-app-different", "request-456", CancellationToken.None));
         }
     }
 
