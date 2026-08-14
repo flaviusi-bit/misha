@@ -29,12 +29,14 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         application.ToTable("applications");
         application.HasKey(x => x.Id);
         application.Property(x => x.ApplicantReference).HasMaxLength(200).IsRequired();
+        application.Property(x => x.IdempotencyKey).HasMaxLength(200);
         application.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         application.Property(x => x.CreatedAtUtc).IsRequired();
         application.Property(x => x.RefusalReason).HasMaxLength(1000);
         application.Property(x => x.Version).IsRowVersion();
         application.HasIndex(x => x.ApplicantReference);
         application.HasIndex(x => x.Status);
+        application.HasIndex(x => x.IdempotencyKey).IsUnique();
 
         var audit = modelBuilder.Entity<DecisionAudit>();
         audit.ToTable("decision_audits");
