@@ -39,6 +39,7 @@ builder.Services.AddDbContext<MishaDbContext>(options => options.UseNpgsql(conne
 builder.Services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
 builder.Services.AddScoped<IDocumentStorage>(sp => new S3DocumentStorage(sp.GetRequiredService<IAmazonS3>(), builder.Configuration["DocumentStorage:BucketName"] ?? string.Empty));
 builder.Services.AddScoped<IApplicationRepository, EfApplicationRepository>();
+builder.Services.AddScoped<IApplicationLifecycleAuditRepository, EfApplicationLifecycleAuditRepository>();
 builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactRepository>();
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
@@ -149,12 +150,12 @@ DecisionEndpoints.Map(app);
 ManualReviewEndpoints.Map(app);
 NotificationEndpoints.Map(app);
 
-app.MapPost("/applications", async (CreateApplicationRequest request, HttpRequest httpRequest, ApplicationService service, CancellationToken ct) =>
+app.MapPost("/applications", async (CreateApplicationRequest request, HttpContext httpContext, ApplicationService service, CancellationToken ct) =>
 {
     try
     {
-        var idempotencyKey = httpRequest.Headers["Idempotency-Key"].FirstOrDefault();
-        var id = await service.CreateAsync(request.ApplicantReference, idempotencyKey, ct);
+        var idempotencyKey = httpContext.Request.Headers["Idempotency-Key"].FirstOrDefault();
+        var id = await service.CreateAsync(request.ApplicantReference, idempotencyKey, GetActorReference(httpContext), ct);
         return Results.Created($"/applications/{id}", new { id });
     }
     catch (InvalidOperationException ex) when (ex.Message.StartsWith("The idempotency key", StringComparison.Ordinal))
@@ -169,11 +170,17 @@ app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service
     return application is null ? Results.NotFound() : Results.Ok(new ApplicationResponse(application.Id, application.ApplicantReference, application.Status.ToString(), application.CreatedAtUtc, application.SubmittedAtUtc, application.ProcessingStartedAtUtc, application.DecidedAtUtc, application.CancelledAtUtc, application.RefusalReason));
 }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
-app.MapPost("/applications/{id:guid}/submit", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.SubmitAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
-app.MapPost("/applications/{id:guid}/process", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.StartProcessingAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-app.MapPost("/applications/{id:guid}/approve", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.ApproveAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-app.MapPost("/applications/{id:guid}/refuse", async (Guid id, RefuseApplicationRequest request, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
-app.MapPost("/applications/{id:guid}/cancel", async (Guid id, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.CancelAsync(id, ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapGet("/applications/{id:guid}/lifecycle", async (Guid id, ApplicationService service, CancellationToken ct) =>
+{
+    var application = await service.GetAsync(id, ct);
+    return application is null ? Results.NotFound() : Results.Ok(await service.GetLifecycleAsync(id, ct));
+}).RequireAuthorization(AuthorizationPolicies.ApiRead);
+
+app.MapPost("/applications/{id:guid}/submit", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.SubmitAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapPost("/applications/{id:guid}/process", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.StartProcessingAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+app.MapPost("/applications/{id:guid}/approve", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.ApproveAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+app.MapPost("/applications/{id:guid}/refuse", async (Guid id, RefuseApplicationRequest request, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
+app.MapPost("/applications/{id:guid}/cancel", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.CancelAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) => (await service.GetAsync(id, ct)).Select(ToDocumentResponse)).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
@@ -238,12 +245,18 @@ app.MapPost("/applications/{id:guid}/policy/evaluate", async (Guid id, PolicySer
 
 app.Run();
 
+static string GetActorReference(HttpContext httpContext) =>
+    httpContext.User.Identity?.Name
+    ?? httpContext.User.FindFirst("sub")?.Value
+    ?? throw new InvalidOperationException("Authenticated actor reference is missing.");
+
 static DocumentResponse ToDocumentResponse(Misha.Domain.Documents.DocumentArtifact document) => new(document.Id, document.ApplicationId, document.DocumentType.ToString(), document.FileName, document.ContentType, document.SizeBytes, document.Sha256, document.StorageKey, document.CreatedAtUtc);
 static async Task<IResult> ExecuteCommand(Func<Task> command)
 {
     try { await command(); return Results.NoContent(); }
     catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    catch (DbUpdateConcurrencyException) { return Results.Conflict(new { error = "The application was changed by another request. Reload it and retry the lifecycle operation." }); }
     catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
 }
 
