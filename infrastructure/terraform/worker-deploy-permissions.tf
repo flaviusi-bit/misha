@@ -28,6 +28,13 @@ resource "aws_iam_role_policy" "github_actions_worker_deploy" {
       {
         Effect = "Allow"
         Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:ListTagsForResource",
           "logs:CreateLogGroup",
           "logs:DeleteLogGroup",
