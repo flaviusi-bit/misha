@@ -110,14 +110,18 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         }
 
         await using var verificationDb = new MishaDbContext(options);
-        var audit = await verificationDb.ApplicationLifecycleAudits
+        var audits = await verificationDb.ApplicationLifecycleAudits
             .Where(x => x.ApplicationId == applicationId)
-            .OrderByDescending(x => x.OccurredAtUtc)
-            .SingleAsync();
+            .OrderBy(x => x.OccurredAtUtc)
+            .ToListAsync();
 
-        Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Refused, audit.ToStatus);
-        Assert.Equal("watchlist match", audit.Reason);
-        Assert.Equal("actor-refusal", audit.ActorReference);
+        Assert.Equal(3, audits.Count);
+
+        var refusalAudit = audits[^1];
+        Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Refused, refusalAudit.ToStatus);
+        Assert.Equal(Misha.Domain.Applications.ApplicationStatus.Processing, refusalAudit.FromStatus);
+        Assert.Equal("watchlist match", refusalAudit.Reason);
+        Assert.Equal("actor-refusal", refusalAudit.ActorReference);
     }
 
     [Fact]
