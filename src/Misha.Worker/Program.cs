@@ -1,6 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
+using Misha.Application.Applications;
 using Misha.Application.Messaging;
+using Misha.Application.Notifications;
+using Misha.Infrastructure.Messaging;
+using Misha.Infrastructure.Notifications;
 using Misha.Infrastructure.Persistence;
 using Misha.Worker;
 
@@ -31,11 +35,23 @@ if (string.IsNullOrWhiteSpace(queueUrl))
 
 builder.Services.AddDbContext<MishaDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddSingleton<Amazon.SQS.IAmazonSQS>(_ => new Amazon.SQS.AmazonSQSClient());
+
+builder.Services.AddScoped<IApplicationRepository, EfApplicationRepository>();
+builder.Services.AddScoped<INotificationRepository, EfNotificationRepository>();
+builder.Services.AddScoped<IEventIdempotencyStore, EfEventIdempotencyStore>();
+builder.Services.AddScoped<IEventHandler, ApplicationLifecycleChangedHandler>();
+builder.Services.AddScoped<EventDispatcher>();
+builder.Services.AddScoped<ISqsMessageConsumer>(sp => new SqsMessageConsumer(
+    sp.GetRequiredService<Amazon.SQS.IAmazonSQS>(),
+    queueUrl,
+    sp.GetRequiredService<ILogger<SqsMessageConsumer>>()));
+
 builder.Services.AddScoped<IOutboxDispatcher>(sp => new SqsOutboxDispatcher(
     sp.GetRequiredService<MishaDbContext>(),
     sp.GetRequiredService<Amazon.SQS.IAmazonSQS>(),
     queueUrl,
     sp.GetRequiredService<ILogger<SqsOutboxDispatcher>>()));
+
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
