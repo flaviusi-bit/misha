@@ -32,6 +32,9 @@ jobs:
       - name: Test
         run: dotnet test Misha.slnx --configuration Release --no-build --verbosity normal
 
+      - name: Build worker container
+        run: docker build -f src/Misha.Worker/Dockerfile -t misha-worker-ci:${{ github.sha }} .
+
   terraform-validate:
     runs-on: ubuntu-latest
     steps:
