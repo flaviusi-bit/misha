@@ -30,10 +30,12 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
             Assert.Contains("20260814000000_AddApplicationIdempotency", migrations);
             Assert.Contains("20260814010000_AddApplicationLifecycleAudits", migrations);
             Assert.Contains("20260814020000_AddOutboxMessages", migrations);
+            Assert.Contains("20260814030000_AddProcessedEvents", migrations);
             var tables = await db.Database.SqlQueryRaw<string>("select table_name as \"Value\" from information_schema.tables where table_schema = 'public'").ToListAsync();
             Assert.Contains("applications", tables);
             Assert.Contains("application_lifecycle_audits", tables);
             Assert.Contains("outbox_messages", tables);
+            Assert.Contains("processed_events", tables);
             Assert.Contains("decision_audits", tables);
             Assert.Contains("watchlist_checks", tables);
         }
