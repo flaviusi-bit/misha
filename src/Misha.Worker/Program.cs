@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Misha.Application.Messaging;
 using Misha.Infrastructure.Persistence;
+using Misha.Worker;
 
 var builder = new HostApplicationBuilder(args);
 
