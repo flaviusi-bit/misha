@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Amazon.SQS;
 using Amazon.SQS.Model;
 using Microsoft.EntityFrameworkCore;
@@ -51,8 +52,8 @@ public sealed class SqsOutboxDispatcherTests : IAsyncLifetime
 
             Assert.Equal(2, published);
             Assert.Equal(2, requests.Count);
-            Assert.Equal("older-payload", requests[0].MessageBody);
-            Assert.Equal("newer-payload", requests[1].MessageBody);
+            Assert.Equal("older-payload", JsonDocument.Parse(requests[0].MessageBody).RootElement.GetProperty("value").GetString());
+            Assert.Equal("newer-payload", JsonDocument.Parse(requests[1].MessageBody).RootElement.GetProperty("value").GetString());
             Assert.Equal("https://sqs.example.test/application-events", requests[0].QueueUrl);
             Assert.Equal("application.lifecycle.changed.v1", requests[0].MessageAttributes["eventType"].StringValue);
             Assert.Equal(aggregateId.ToString(), requests[0].MessageAttributes["aggregateId"].StringValue);
@@ -146,7 +147,7 @@ public sealed class SqsOutboxDispatcherTests : IAsyncLifetime
         Id = id,
         EventType = "application.lifecycle.changed.v1",
         AggregateId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-        Payload = payload,
+        Payload = JsonSerializer.Serialize(new { value = payload }),
         OccurredAtUtc = occurredAtUtc,
         PublishedAtUtc = publishedAtUtc,
         AttemptCount = 0
