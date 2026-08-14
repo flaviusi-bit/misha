@@ -23,6 +23,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid>("Id").HasColumnType("uuid");
             b.Property<uint>("Version").IsRowVersion().HasColumnName("xmin");
             b.Property<string>("ApplicantReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<string>("IdempotencyKey").HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
             b.Property<DateTimeOffset?>("SubmittedAtUtc").HasColumnType("timestamp with time zone");
             b.Property<DateTimeOffset?>("ProcessingStartedAtUtc").HasColumnType("timestamp with time zone");
@@ -32,6 +33,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<int>("Status").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
             b.HasKey("Id");
             b.HasIndex("ApplicantReference");
+            b.HasIndex("IdempotencyKey").IsUnique();
             b.HasIndex("Status");
             b.ToTable("applications");
         });
@@ -144,7 +146,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid?>("EtaId").HasColumnType("uuid");
             b.Property<Guid?>("ApplicationId").HasColumnType("uuid");
             b.Property<string>("EtaNumber").HasMaxLength(32).HasColumnType("character varying(32)");
-            b.Property<int>("EventType").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("EventType").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32");
             b.Property<string>("Outcome").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<string>("ActorReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone");
