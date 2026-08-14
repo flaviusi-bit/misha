@@ -10,7 +10,9 @@ on:
       - 'src/Misha.Domain/**'
       - 'Misha.slnx'
       - 'global.json'
+      - '.dockerignore'
       - 'infrastructure/terraform/ecs-worker.tf'
+      - 'infrastructure/terraform/worker-deploy-permissions.tf'
       - 'infrastructure/terraform/variables.tf'
       - '.github/workflows/aws-ecs-worker-deploy.yml'
   workflow_dispatch:
