@@ -53,9 +53,33 @@ variable "ecs_desired_count" {
   default     = 1
 }
 
+variable "ecs_worker_cpu" {
+  type        = number
+  description = "CPU units allocated to each ECS worker task."
+  default     = 256
+}
+
+variable "ecs_worker_memory" {
+  type        = number
+  description = "Memory in MiB allocated to each ECS worker task."
+  default     = 512
+}
+
+variable "ecs_worker_desired_count" {
+  type        = number
+  description = "Desired number of ECS worker tasks."
+  default     = 1
+}
+
 variable "container_image" {
   type        = string
   description = "ECR image URI for the MISHA API."
+  default     = ""
+}
+
+variable "worker_container_image" {
+  type        = string
+  description = "ECR image URI for the MISHA worker."
   default     = ""
 }
 

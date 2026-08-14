@@ -1,0 +1,26 @@
+# Build artifacts
+**/bin/
+**/obj/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# IDE / local tooling
+.vs/
+.idea/
+*.user
+*.suo
+
+# Test / coverage artifacts
+TestResults/
+coverage/
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pfx
+*.key

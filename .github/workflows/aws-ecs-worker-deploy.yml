@@ -1,0 +1,138 @@
+name: AWS ECS Worker Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/Misha.Worker/**'
+      - 'src/Misha.Application/**'
+      - 'src/Misha.Infrastructure/**'
+      - 'src/Misha.Domain/**'
+      - 'Misha.slnx'
+      - 'global.json'
+      - 'infrastructure/terraform/ecs-worker.tf'
+      - 'infrastructure/terraform/variables.tf'
+      - '.github/workflows/aws-ecs-worker-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-ecs-worker-dev
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  ECR_REPOSITORY: misha-dev-worker
+  ECS_CLUSTER: misha-dev
+  ECS_SERVICE: misha-dev-worker
+  ECS_TASK_DEFINITION: misha-dev-worker
+  CONTAINER_NAME: worker
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: aws-dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate deployment role configuration
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          test -n "$AWS_DEPLOY_ROLE_ARN" || {
+            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
+            exit 1
+          }
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActionsECSWorkerDeploy
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Verify worker infrastructure exists
+        run: |
+          set -euo pipefail
+          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null
+          aws ecs describe-task-definition --task-definition "$ECS_TASK_DEFINITION" >/dev/null
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].status' --output text | grep -qx 'ACTIVE'
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve ECR registry
+        id: registry
+        run: echo "registry=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push worker image
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build -f src/Misha.Worker/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Fetch current worker task definition
+        run: aws ecs describe-task-definition --task-definition "$ECS_TASK_DEFINITION" --query taskDefinition > worker-task-definition.json
+
+      - name: Verify worker queue configuration
+        run: |
+          set -euo pipefail
+          jq -e '.containerDefinitions[] | select(.name == "worker") | any(.environment[]?; .name == "Outbox__QueueUrl" and (.value | startswith("https://sqs.")))' worker-task-definition.json >/dev/null
+          echo "Worker SQS queue configuration is present."
+
+      - name: Render worker ECS task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: worker-task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ env.IMAGE }}
+
+      - name: Deploy worker ECS service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      - name: Verify worker service and queue configuration
+        run: |
+          set -euo pipefail
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --query 'services[0].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition}' \
+            --output table
+
+          RUNNING=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].runningCount' --output text)
+          DESIRED=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].desiredCount' --output text)
+          test "$RUNNING" -ge 1
+          test "$DESIRED" -ge 1
+
+          TASK_DEF=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].taskDefinition' --output text)
+          aws ecs describe-task-definition --task-definition "$TASK_DEF" \
+            --query 'taskDefinition.containerDefinitions[?name==`worker`].{Image:image,Queue:environment[?name==`Outbox__QueueUrl`].value|[0]}' \
+            --output table
+
+      - name: Verify worker IAM policy
+        run: |
+          aws iam get-role-policy \
+            --role-name misha-dev-ecs-worker-task \
+            --policy-name misha-dev-ecs-worker-task-policy \
+            --query 'PolicyDocument.Statement[0].Action' \
+            --output json
