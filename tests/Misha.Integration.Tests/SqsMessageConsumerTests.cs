@@ -3,6 +3,7 @@ using Amazon.SQS.Model;
 using Microsoft.Extensions.Logging.Abstractions;
 using Misha.Infrastructure.Messaging;
 using Moq;
+using Xunit;
 
 namespace Misha.Integration.Tests;
 
