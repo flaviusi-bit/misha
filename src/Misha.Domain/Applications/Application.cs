@@ -4,16 +4,18 @@ public sealed class Application
 {
     private Application() { }
 
-    private Application(Guid id, string applicantReference)
+    private Application(Guid id, string applicantReference, string? idempotencyKey)
     {
         Id = id;
         ApplicantReference = applicantReference;
+        IdempotencyKey = idempotencyKey;
         Status = ApplicationStatus.Draft;
         CreatedAtUtc = DateTimeOffset.UtcNow;
     }
 
     public Guid Id { get; private set; }
     public string ApplicantReference { get; private set; } = string.Empty;
+    public string? IdempotencyKey { get; private set; }
     public ApplicationStatus Status { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset? SubmittedAtUtc { get; private set; }
@@ -25,12 +27,16 @@ public sealed class Application
     // PostgreSQL maps this property to the implicit xmin column for optimistic concurrency.
     public uint Version { get; private set; }
 
-    public static Application Create(string applicantReference)
+    public static Application Create(string applicantReference, string? idempotencyKey = null)
     {
         if (string.IsNullOrWhiteSpace(applicantReference))
             throw new ArgumentException("Applicant reference is required.", nameof(applicantReference));
 
-        return new Application(Guid.NewGuid(), applicantReference.Trim());
+        var normalizedKey = string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim();
+        if (normalizedKey is not null && normalizedKey.Length > 200)
+            throw new ArgumentException("Idempotency key must be 200 characters or fewer.", nameof(idempotencyKey));
+
+        return new Application(Guid.NewGuid(), applicantReference.Trim(), normalizedKey);
     }
 
     public void Submit()
