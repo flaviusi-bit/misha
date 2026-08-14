@@ -77,7 +77,6 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("Sha256").IsRequired().HasMaxLength(64).HasColumnType("character varying(64)");
             b.Property<long>("SizeBytes").HasColumnType("bigint");
             b.Property<string>("StorageKey").IsRequired().HasMaxLength(500).HasColumnType("character varying(500)");
-            b.Property<string>("StorageKey").IsRequired().HasMaxLength(500).HasColumnType("character varying(500)");
             b.Property<int>("DocumentType").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.HasKey("Id");
             b.HasIndex("ApplicationId", "CreatedAtUtc");
@@ -198,7 +197,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<Guid>("ApplicationId").HasColumnType("uuid");
             b.Property<string>("RecipientReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<string>("Channel").IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
-            b.Property<string>("Template").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)");
+            b.Property<string>("Template").IsRequired().HasMaxLength(100).HasColumnType("character varying(100");
             b.Property<string>("Payload").IsRequired().HasColumnType("text");
             b.Property<int>("Status").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
             b.Property<int>("Attempts").HasColumnType("integer");
