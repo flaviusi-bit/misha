@@ -1,6 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Misha.Domain.Applications;
-
 namespace Misha.Application.Applications;
 
 public sealed class ApplicationService(IApplicationRepository repository)
@@ -20,27 +17,12 @@ public sealed class ApplicationService(IApplicationRepository repository)
         }
 
         var application = Misha.Domain.Applications.Application.Create(applicantReference, idempotencyKey);
-        await repository.AddAsync(application, cancellationToken);
+        var persisted = await repository.AddOrGetExistingAsync(application, cancellationToken);
 
-        try
-        {
-            await repository.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException) when (!string.IsNullOrWhiteSpace(idempotencyKey))
-        {
-            var existing = await repository.GetByIdempotencyKeyAsync(idempotencyKey.Trim(), cancellationToken);
-            if (existing is not null)
-            {
-                if (!string.Equals(existing.ApplicantReference, applicantReference.Trim(), StringComparison.Ordinal))
-                    throw new InvalidOperationException("The idempotency key has already been used for a different application request.");
+        if (!string.Equals(persisted.ApplicantReference, applicantReference.Trim(), StringComparison.Ordinal))
+            throw new InvalidOperationException("The idempotency key has already been used for a different application request.");
 
-                return existing.Id;
-            }
-
-            throw;
-        }
-
-        return application.Id;
+        return persisted.Id;
     }
 
     public Task<Guid> CreateAsync(string applicantReference, CancellationToken cancellationToken) =>
