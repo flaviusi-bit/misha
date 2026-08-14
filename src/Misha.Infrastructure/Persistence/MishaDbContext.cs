@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MishaApplication = Misha.Domain.Applications.Application;
+using Misha.Domain.Applications;
 using Misha.Domain.Decisions;
 using Misha.Domain.Documents;
 using Misha.Domain.Etas;
@@ -13,6 +14,7 @@ namespace Misha.Infrastructure.Persistence;
 public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : DbContext(options)
 {
     public DbSet<MishaApplication> Applications => Set<MishaApplication>();
+    public DbSet<ApplicationLifecycleAudit> ApplicationLifecycleAudits => Set<ApplicationLifecycleAudit>();
     public DbSet<DecisionAudit> DecisionAudits => Set<DecisionAudit>();
     public DbSet<DocumentArtifact> DocumentArtifacts => Set<DocumentArtifact>();
     public DbSet<PassportDocument> PassportDocuments => Set<PassportDocument>();
@@ -37,6 +39,16 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         application.HasIndex(x => x.ApplicantReference);
         application.HasIndex(x => x.Status);
         application.HasIndex(x => x.IdempotencyKey).IsUnique();
+
+        var lifecycleAudit = modelBuilder.Entity<ApplicationLifecycleAudit>();
+        lifecycleAudit.ToTable("application_lifecycle_audits");
+        lifecycleAudit.HasKey(x => x.Id);
+        lifecycleAudit.Property(x => x.FromStatus).HasConversion<string>().HasMaxLength(32);
+        lifecycleAudit.Property(x => x.ToStatus).HasConversion<string>().HasMaxLength(32).IsRequired();
+        lifecycleAudit.Property(x => x.Reason).HasMaxLength(1000);
+        lifecycleAudit.Property(x => x.ActorReference).HasMaxLength(200).IsRequired();
+        lifecycleAudit.Property(x => x.OccurredAtUtc).IsRequired();
+        lifecycleAudit.HasIndex(x => new { x.ApplicationId, x.OccurredAtUtc });
 
         var audit = modelBuilder.Entity<DecisionAudit>();
         audit.ToTable("decision_audits");
