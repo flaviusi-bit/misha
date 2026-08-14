@@ -9,6 +9,9 @@ public sealed class EfApplicationRepository(MishaDbContext db) : IApplicationRep
     public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         db.Applications.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
 
+    public Task<DomainApplication?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken) =>
+        db.Applications.SingleOrDefaultAsync(x => x.IdempotencyKey == idempotencyKey, cancellationToken);
+
     public Task AddAsync(DomainApplication application, CancellationToken cancellationToken)
     {
         db.Applications.Add(application);
