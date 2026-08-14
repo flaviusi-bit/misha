@@ -24,17 +24,20 @@ public sealed class SqsOutboxDispatcherTests : IAsyncLifetime
     public async Task Dispatch_pending_publishes_oldest_messages_with_metadata_and_marks_them_published()
     {
         var options = CreateOptions();
+        Guid olderId;
+        Guid newerId;
         await using (var db = new MishaDbContext(options))
         {
             await db.Database.MigrateAsync();
-            var olderId = Guid.NewGuid();
-            var newerId = Guid.NewGuid();
+            olderId = Guid.NewGuid();
+            newerId = Guid.NewGuid();
             db.OutboxMessages.AddRange(
                 NewMessage(olderId, DateTimeOffset.UtcNow.AddMinutes(-2), "older-payload"),
                 NewMessage(newerId, DateTimeOffset.UtcNow.AddMinutes(-1), "newer-payload"));
             await db.SaveChangesAsync();
         }
 
+        var aggregateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
         var requests = new List<SendMessageRequest>();
         var sqs = new Mock<IAmazonSQS>();
         sqs.Setup(x => x.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<CancellationToken>()))
@@ -52,8 +55,8 @@ public sealed class SqsOutboxDispatcherTests : IAsyncLifetime
             Assert.Equal("newer-payload", requests[1].MessageBody);
             Assert.Equal("https://sqs.example.test/application-events", requests[0].QueueUrl);
             Assert.Equal("application.lifecycle.changed.v1", requests[0].MessageAttributes["eventType"].StringValue);
-            Assert.Equal("aggregate-001", requests[0].MessageAttributes["aggregateId"].StringValue);
-            Assert.NotEqual(Guid.Empty.ToString(), requests[0].MessageAttributes["eventId"].StringValue);
+            Assert.Equal(aggregateId.ToString(), requests[0].MessageAttributes["aggregateId"].StringValue);
+            Assert.Equal(olderId.ToString(), requests[0].MessageAttributes["eventId"].StringValue);
 
             var persisted = await db.OutboxMessages.OrderBy(x => x.OccurredAtUtc).ToListAsync();
             Assert.All(persisted, message => Assert.NotNull(message.PublishedAtUtc));
@@ -138,7 +141,7 @@ public sealed class SqsOutboxDispatcherTests : IAsyncLifetime
         sqs.Verify(x => x.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    private OutboxMessage NewMessage(Guid id, DateTimeOffset occurredAtUtc, string payload, DateTimeOffset? publishedAtUtc = null) => new()
+    private static OutboxMessage NewMessage(Guid id, DateTimeOffset occurredAtUtc, string payload, DateTimeOffset? publishedAtUtc = null) => new()
     {
         Id = id,
         EventType = "application.lifecycle.changed.v1",
