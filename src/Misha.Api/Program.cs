@@ -149,10 +149,18 @@ DecisionEndpoints.Map(app);
 ManualReviewEndpoints.Map(app);
 NotificationEndpoints.Map(app);
 
-app.MapPost("/applications", async (CreateApplicationRequest request, ApplicationService service, CancellationToken ct) =>
+app.MapPost("/applications", async (CreateApplicationRequest request, HttpRequest httpRequest, ApplicationService service, CancellationToken ct) =>
 {
-    var id = await service.CreateAsync(request.ApplicantReference, ct);
-    return Results.Created($"/applications/{id}", new { id });
+    try
+    {
+        var idempotencyKey = httpRequest.Headers["Idempotency-Key"].FirstOrDefault();
+        var id = await service.CreateAsync(request.ApplicantReference, idempotencyKey, ct);
+        return Results.Created($"/applications/{id}", new { id });
+    }
+    catch (InvalidOperationException ex) when (ex.Message.StartsWith("The idempotency key", StringComparison.Ordinal))
+    {
+        return Results.Conflict(new { error = ex.Message });
+    }
 }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
 app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service, CancellationToken ct) =>
