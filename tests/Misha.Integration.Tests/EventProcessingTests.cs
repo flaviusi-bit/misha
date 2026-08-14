@@ -204,7 +204,7 @@ public sealed class EventProcessingTests : IAsyncLifetime
         return await db.Database.SqlQuery<int>($"""
             SELECT COUNT(*)::integer AS "Value"
             FROM processed_events
-            WHERE event_id = {eventId};
+            WHERE event_id = {eventId}
             """).SingleAsync();
     }
 
