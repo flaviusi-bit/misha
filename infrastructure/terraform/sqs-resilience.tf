@@ -23,4 +23,6 @@ resource "aws_cloudwatch_metric_alarm" "application_events_dlq_depth" {
   threshold           = 0
   comparison_operator = "GreaterThanThreshold"
   treat_missing_data  = "notBreaching"
+
+  depends_on = [aws_iam_role_policy.github_actions_worker_bootstrap]
 }
