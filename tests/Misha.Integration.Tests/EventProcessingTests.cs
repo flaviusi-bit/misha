@@ -128,7 +128,7 @@ public sealed class EventProcessingTests : IAsyncLifetime
         await MigrateAsync();
         var eventId = Guid.NewGuid();
         var calls = 0;
-        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         await using var firstDb = CreateDbContext();
         await using var secondDb = CreateDbContext();
@@ -153,7 +153,7 @@ public sealed class EventProcessingTests : IAsyncLifetime
             CancellationToken.None);
 
         await Task.Delay(100);
-        gate.SetResult();
+        gate.SetResult(true);
         var results = await Task.WhenAll(first, second);
 
         Assert.Equal(1, results.Count(x => x));
