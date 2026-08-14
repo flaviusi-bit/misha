@@ -4,6 +4,14 @@ namespace Misha.Application.Applications;
 
 public sealed class ApplicationService(IApplicationRepository repository, IApplicationLifecycleAuditRepository lifecycleAudits)
 {
+    public Task<Guid> CreateAsync(string applicantReference, string? idempotencyKey, string actorReference, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(actorReference))
+            throw new ArgumentException("Actor reference is required.", nameof(actorReference));
+
+        return CreateAsync(applicantReference, idempotencyKey, cancellationToken);
+    }
+
     public async Task<Guid> CreateAsync(string applicantReference, string? idempotencyKey, CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(idempotencyKey))
