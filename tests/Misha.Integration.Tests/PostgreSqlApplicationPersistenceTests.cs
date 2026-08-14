@@ -105,6 +105,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
 
             applicationId = await service.CreateAsync("integration-app-refusal", CancellationToken.None);
             await service.SubmitAsync(applicationId, "actor-refusal", CancellationToken.None);
+            await service.StartProcessingAsync(applicationId, "actor-refusal", CancellationToken.None);
             await service.RefuseAsync(applicationId, "watchlist match", "actor-refusal", CancellationToken.None);
         }
 
@@ -146,6 +147,10 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         var secondService = new ApplicationService(
             new EfApplicationRepository(secondDb),
             new EfApplicationLifecycleAuditRepository(secondDb));
+
+        // Load the second copy before the first transaction changes the row. This creates
+        // the stale xmin concurrency token that the test is intended to exercise.
+        await secondDb.Applications.SingleAsync(x => x.Id == applicationId);
 
         await firstService.SubmitAsync(applicationId, "actor-first", CancellationToken.None);
 
