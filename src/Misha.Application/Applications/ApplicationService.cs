@@ -1,8 +1,15 @@
+using Misha.Domain.Applications;
+
 namespace Misha.Application.Applications;
 
-public sealed class ApplicationService(IApplicationRepository repository)
+public sealed class ApplicationService(
+    IApplicationRepository repository,
+    IApplicationLifecycleAuditRepository lifecycleAudits)
 {
-    public async Task<Guid> CreateAsync(string applicantReference, string? idempotencyKey, CancellationToken cancellationToken)
+    public async Task<Guid> CreateAsync(
+        string applicantReference,
+        string? idempotencyKey,
+        CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(idempotencyKey))
         {
@@ -31,46 +38,52 @@ public sealed class ApplicationService(IApplicationRepository repository)
     public Task<Misha.Domain.Applications.Application?> GetAsync(Guid id, CancellationToken cancellationToken) =>
         repository.GetAsync(id, cancellationToken);
 
-    public async Task SubmitAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var application = await GetRequiredAsync(id, cancellationToken);
-        application.Submit();
-        await repository.SaveChangesAsync(cancellationToken);
-    }
+    public Task SubmitAsync(Guid id, string actorReference, CancellationToken cancellationToken) =>
+        TransitionAsync(id, actorReference, null, application => application.Submit(), cancellationToken);
 
-    public async Task StartProcessingAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var application = await GetRequiredAsync(id, cancellationToken);
-        application.StartProcessing();
-        await repository.SaveChangesAsync(cancellationToken);
-    }
+    public Task StartProcessingAsync(Guid id, string actorReference, CancellationToken cancellationToken) =>
+        TransitionAsync(id, actorReference, null, application => application.StartProcessing(), cancellationToken);
 
-    public async Task ApproveAsync(Guid id, CancellationToken cancellationToken)
-    {
-        var application = await GetRequiredAsync(id, cancellationToken);
-        application.Approve();
-        await repository.SaveChangesAsync(cancellationToken);
-    }
+    public Task ApproveAsync(Guid id, string actorReference, CancellationToken cancellationToken) =>
+        TransitionAsync(id, actorReference, null, application => application.Approve(), cancellationToken);
 
-    public async Task RefuseAsync(Guid id, string reason, CancellationToken cancellationToken)
-    {
-        var application = await GetRequiredAsync(id, cancellationToken);
-        application.Refuse(reason);
-        await repository.SaveChangesAsync(cancellationToken);
-    }
+    public Task RefuseAsync(Guid id, string reason, string actorReference, CancellationToken cancellationToken) =>
+        TransitionAsync(id, actorReference, reason, application => application.Refuse(reason), cancellationToken);
 
-    public async Task CancelAsync(Guid id, CancellationToken cancellationToken)
+    public Task CancelAsync(Guid id, string actorReference, CancellationToken cancellationToken) =>
+        TransitionAsync(id, actorReference, null, application => application.Cancel(), cancellationToken);
+
+    public Task<IReadOnlyList<ApplicationLifecycleAudit>> GetLifecycleAsync(
+        Guid id,
+        CancellationToken cancellationToken) =>
+        lifecycleAudits.GetByApplicationAsync(id, cancellationToken);
+
+    private async Task TransitionAsync(
+        Guid id,
+        string actorReference,
+        string? reason,
+        Action<Misha.Domain.Applications.Application> transition,
+        CancellationToken cancellationToken)
     {
         var application = await GetRequiredAsync(id, cancellationToken);
-        application.Cancel();
+        var fromStatus = application.Status;
+
+        transition(application);
+
+        var audit = ApplicationLifecycleAudit.Create(
+            application.Id,
+            fromStatus,
+            application.Status,
+            actorReference,
+            reason);
+
+        await lifecycleAudits.AddAsync(audit, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<Misha.Domain.Applications.Application> GetRequiredAsync(
         Guid id,
-        CancellationToken cancellationToken)
-    {
-        return await repository.GetAsync(id, cancellationToken)
+        CancellationToken cancellationToken) =>
+        await repository.GetAsync(id, cancellationToken)
             ?? throw new KeyNotFoundException($"Application '{id}' was not found.");
-    }
 }

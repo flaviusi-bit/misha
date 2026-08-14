@@ -38,6 +38,20 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.ToTable("applications");
         });
 
+        modelBuilder.Entity("Misha.Domain.Applications.ApplicationLifecycleAudit", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<Guid>("ApplicationId").HasColumnType("uuid");
+            b.Property<int?>("FromStatus").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<int>("ToStatus").HasConversion<string>().IsRequired().HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("Reason").HasMaxLength(1000).HasColumnType("character varying(1000)");
+            b.Property<string>("ActorReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<DateTimeOffset>("OccurredAtUtc").HasColumnType("timestamp with time zone");
+            b.HasKey("Id");
+            b.HasIndex("ApplicationId", "OccurredAtUtc");
+            b.ToTable("application_lifecycle_audits");
+        });
+
         modelBuilder.Entity("Misha.Domain.Decisions.DecisionAudit", b =>
         {
             b.Property<Guid>("Id").HasColumnType("uuid");
