@@ -74,7 +74,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ecr:TagResource",
         "ecr:UntagResource",
         "ecr:UploadLayerPart"
-      ], Resource = aws_ecr_repository.api.arn },
+      ], Resource = [aws_ecr_repository.api.arn, aws_ecr_repository.worker.arn] },
       { Effect = "Allow", Action = [
         "ecs:DescribeClusters",
         "ecs:DescribeServices",
@@ -172,7 +172,10 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "logs:DeleteRetentionPolicy",
         "logs:TagResource",
         "logs:UntagResource"
-      ], Resource = "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/api" },
+      ], Resource = [
+        "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/api",
+        "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/worker"
+      ] },
       { Effect = "Allow", Action = [
         "rds:Describe*",
         "rds:ListTagsForResource",
@@ -253,6 +256,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         aws_iam_role.github_actions_deploy.arn,
         aws_iam_role.ecs_execution.arn,
         aws_iam_role.ecs_task.arn,
+        aws_iam_role.ecs_worker_task.arn,
         "arn:aws:iam::576984879588:role/${local.name}-backup"
       ] },
       { Effect = "Allow", Action = ["iam:CreateOpenIDConnectProvider"], Resource = "*" },
@@ -263,7 +267,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "iam:RemoveClientIDFromOpenIDConnectProvider",
         "iam:UpdateOpenIDConnectProviderThumbprint"
       ], Resource = aws_iam_openid_connect_provider.github_actions.arn },
-      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn, "arn:aws:iam::576984879588:role/${local.name}-backup"] },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [aws_iam_role.ecs_execution.arn, aws_iam_role.ecs_task.arn, aws_iam_role.ecs_worker_task.arn, "arn:aws:iam::576984879588:role/${local.name}-backup"] },
       { Effect = "Allow", Action = [
         "elasticloadbalancing:Describe*",
         "elasticloadbalancing:CreateLoadBalancer",
@@ -281,7 +285,14 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "elasticloadbalancing:CreateListener",
         "elasticloadbalancing:DeleteListener",
         "elasticloadbalancing:ModifyListener"
-      ], Resource = "*" }
+      ], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:TagResource",
+        "cloudwatch:UntagResource"
+      ], Resource = "arn:aws:cloudwatch:eu-central-1:576984879588:alarm:${local.name}-*" }
     ]
   })
 }
