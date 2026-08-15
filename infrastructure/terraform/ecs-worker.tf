@@ -9,8 +9,6 @@ resource "aws_ecr_repository" "worker" {
   encryption_configuration {
     encryption_type = "AES256"
   }
-
-  depends_on = [terraform_data.worker_iam_policy_propagation]
 }
 
 resource "aws_ecr_lifecycle_policy" "worker" {
@@ -35,8 +33,6 @@ resource "aws_ecr_lifecycle_policy" "worker" {
 resource "aws_cloudwatch_log_group" "worker" {
   name              = "/ecs/${local.name}/worker"
   retention_in_days = 30
-
-  depends_on = [terraform_data.worker_iam_policy_propagation]
 }
 
 resource "aws_iam_role" "ecs_worker_task" {
@@ -50,8 +46,6 @@ resource "aws_iam_role" "ecs_worker_task" {
       Action    = "sts:AssumeRole"
     }]
   })
-
-  depends_on = [terraform_data.worker_iam_policy_propagation]
 }
 
 resource "aws_iam_role_policy" "ecs_worker_task" {
