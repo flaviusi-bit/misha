@@ -29,12 +29,18 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
       {
         Effect = "Allow"
         Action = [
-          "logs:DeleteLogGroup",
-          "logs:ListTagsForResource",
-          "logs:PutRetentionPolicy",
-          "logs:DeleteRetentionPolicy",
           "logs:TagResource",
-          "logs:UntagResource"
+          "logs:UntagResource",
+          "logs:ListTagsForResource"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:DeleteLogGroup",
+          "logs:PutRetentionPolicy",
+          "logs:DeleteRetentionPolicy"
         ]
         Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker:*"
       },
@@ -122,13 +128,18 @@ resource "aws_iam_role_policy" "github_actions_worker_deploy" {
       {
         Effect = "Allow"
         Action = [
-          "logs:ListTagsForResource",
-          "logs:CreateLogGroup",
+          "logs:TagResource",
+          "logs:UntagResource",
+          "logs:ListTagsForResource"
+        ]
+        Resource = aws_cloudwatch_log_group.worker.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:DeleteLogGroup",
           "logs:PutRetentionPolicy",
-          "logs:DeleteRetentionPolicy",
-          "logs:TagResource",
-          "logs:UntagResource"
+          "logs:DeleteRetentionPolicy"
         ]
         Resource = "${aws_cloudwatch_log_group.worker.arn}:*"
       }
