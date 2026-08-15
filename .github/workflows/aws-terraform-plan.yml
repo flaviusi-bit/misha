@@ -6,7 +6,6 @@ on:
     paths:
       - 'infrastructure/terraform/**'
       - '.github/workflows/aws-terraform-plan.yml'
-      - '.github/workflows/aws-terraform-apply.yml'
   pull_request:
     branches: [main]
   workflow_dispatch:
