@@ -65,15 +65,45 @@ jobs:
         run: terraform validate
 
       # The deployment role owns the Terraform-managed worker bootstrap policy.
-      # When that policy itself changes, a normal full refresh can fail before
-      # Terraform gets the opportunity to apply the new permissions. Apply the
-      # permission resources first; the subsequent full plan can then refresh
-      # the worker resources successfully.
+      # A normal full refresh can fail immediately after an IAM policy update
+      # because IAM policy changes are eventually consistent. Bootstrap the
+      # permissions first, then actively verify the exact AWS API calls Terraform
+      # needs before allowing Terraform to perform its full refresh.
       - name: Bootstrap Terraform deployment permissions
         run: |
           terraform apply -input=false -auto-approve \
             -target=aws_iam_role_policy.github_actions_worker_bootstrap \
             -target=aws_iam_role_policy.github_actions_deploy
+
+      - name: Verify IAM propagation for Terraform refresh
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 18); do
+            echo "IAM propagation check ${attempt}/18"
+            failed=0
+
+            aws ecr describe-repositories \
+              --region eu-central-1 \
+              --repository-names misha-dev-worker >/dev/null 2>&1 || failed=1
+
+            aws cloudwatch list-tags-for-resource \
+              --region eu-central-1 \
+              --resource-arn arn:aws:cloudwatch:eu-central-1:576984879588:alarm:misha-dev-application-events-dlq-depth >/dev/null 2>&1 || failed=1
+
+            aws iam list-attached-role-policies \
+              --role-name misha-dev-ecs-worker-task >/dev/null 2>&1 || failed=1
+
+            if [ "$failed" -eq 0 ]; then
+              echo "PASS: deployment-role permissions are observable through all Terraform refresh APIs."
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "FAIL: IAM permissions did not propagate within 90 seconds."
+          exit 1
 
       - name: Terraform plan
         run: terraform plan -input=false -out=tfplan
