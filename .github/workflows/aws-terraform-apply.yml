@@ -27,6 +27,16 @@ jobs:
         working-directory: infrastructure/terraform
 
     steps:
+      - name: Require main branch
+        working-directory: .
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "ERROR: AWS Terraform Apply must be dispatched from main."
+            echo "Selected ref: $GITHUB_REF"
+            exit 1
+          }
+
       - name: Checkout
         uses: actions/checkout@v5
 
