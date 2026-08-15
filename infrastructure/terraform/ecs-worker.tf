@@ -39,29 +39,41 @@ resource "aws_iam_role_policy" "github_actions_worker_logs" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:DeleteLogGroup",
-        "logs:DeleteRetentionPolicy",
-        "logs:DescribeLogGroups",
-        "logs:ListTagsForResource",
-        "logs:PutRetentionPolicy",
-        "logs:TagResource",
-        "logs:UntagResource"
-      ]
-      Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:DeleteLogGroup",
+          "logs:DeleteRetentionPolicy",
+          "logs:DescribeLogGroups"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["logs:PutRetentionPolicy"]
+        Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:ListTagsForResource",
+          "logs:TagResource",
+          "logs:UntagResource"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker"
+      }
+    ]
   })
 }
 
 # IAM policy writes are eventually consistent. Terraform's dependency graph
 # guarantees ordering, but AWS can still reject the immediately-following
-# API call while the new identity policy is propagating. Wait once after the
-# policy is materialized so the log-group update is deterministic.
+# API call while the new identity policy is propagating. Re-run the barrier
+# whenever the policy document changes, not only when the policy ID changes.
 resource "terraform_data" "github_actions_worker_logs_propagation" {
-  triggers_replace = [aws_iam_role_policy.github_actions_worker_logs.id]
+  triggers_replace = [sha256(aws_iam_role_policy.github_actions_worker_logs.policy)]
 
   provisioner "local-exec" {
     command = "sleep 60"
