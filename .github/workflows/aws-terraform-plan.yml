@@ -19,6 +19,21 @@ on:
           - dev
           - staging
           - prod
+      domain_name:
+        description: 'Production API domain name (required for prod)'
+        required: false
+        default: ''
+        type: string
+      route53_zone_id:
+        description: 'Route53 hosted zone ID (required for prod)'
+        required: false
+        default: ''
+        type: string
+      final_snapshot_identifier:
+        description: 'RDS final snapshot identifier (required for prod)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -41,6 +56,20 @@ jobs:
             echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
             exit 1
           }
+
+      - name: Validate production inputs
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+          DOMAIN_NAME: ${{ inputs.domain_name || '' }}
+          ROUTE53_ZONE_ID: ${{ inputs.route53_zone_id || '' }}
+          FINAL_SNAPSHOT_IDENTIFIER: ${{ inputs.final_snapshot_identifier || '' }}
+        run: |
+          set -euo pipefail
+          if [ "$TARGET_ENVIRONMENT" = "prod" ]; then
+            test -n "$DOMAIN_NAME" || { echo "Production requires domain_name."; exit 1; }
+            test -n "$ROUTE53_ZONE_ID" || { echo "Production requires route53_zone_id."; exit 1; }
+            test -n "$FINAL_SNAPSHOT_IDENTIFIER" || { echo "Production requires final_snapshot_identifier."; exit 1; }
+          fi
 
       - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -73,4 +102,12 @@ jobs:
         working-directory: infrastructure/terraform
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
-        run: terraform plan -input=false -var="environment=${TARGET_ENVIRONMENT}"
+          DOMAIN_NAME: ${{ inputs.domain_name || '' }}
+          ROUTE53_ZONE_ID: ${{ inputs.route53_zone_id || '' }}
+          FINAL_SNAPSHOT_IDENTIFIER: ${{ inputs.final_snapshot_identifier || '' }}
+        run: |
+          terraform plan -input=false \
+            -var="environment=${TARGET_ENVIRONMENT}" \
+            -var="domain_name=${DOMAIN_NAME}" \
+            -var="route53_zone_id=${ROUTE53_ZONE_ID}" \
+            -var="final_snapshot_identifier=${FINAL_SNAPSHOT_IDENTIFIER}"
