@@ -3,6 +3,15 @@ name: AWS Terraform Apply
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Terraform environment to apply"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
       confirm:
         description: "Type APPLY to authorize the Terraform apply"
         required: true
@@ -13,14 +22,14 @@ permissions:
   id-token: write
 
 concurrency:
-  group: aws-terraform-apply-dev
+  group: aws-terraform-apply-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 jobs:
   terraform-apply:
     if: ${{ inputs.confirm == 'APPLY' }}
     runs-on: ubuntu-latest
-    environment: aws-dev
+    environment: aws-${{ inputs.environment || 'dev' }}
 
     defaults:
       run:
@@ -75,26 +84,36 @@ jobs:
         run: terraform validate
 
       - name: Terraform plan
-        run: terraform plan -input=false -out=tfplan
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: terraform plan -input=false -var="environment=${TARGET_ENVIRONMENT}" -out=tfplan
 
       - name: Terraform apply approved plan
         run: terraform apply -input=false tfplan
 
       - name: Verify managed application secret exists
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
         run: |
-          SECRET_NAME="misha-dev/application"
+          SECRET_NAME="misha-${TARGET_ENVIRONMENT}/application"
           aws secretsmanager describe-secret \
             --secret-id "$SECRET_NAME" \
             --query '{ARN:ARN,Name:Name}' \
             --output table
 
       - name: Verify ECS execution policy references application secret
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
         run: |
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-ecs-execution"
+          POLICY_NAME="misha-${TARGET_ENVIRONMENT}-ecs-execution-secrets"
           aws iam get-role-policy \
-            --role-name misha-dev-ecs-execution \
-            --policy-name misha-dev-ecs-execution-secrets \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
             --query 'PolicyDocument.Statement[0].Resource' \
             --output json
 
       - name: Verify Terraform state is clean
-        run: terraform plan -input=false -detailed-exitcode
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: terraform plan -input=false -var="environment=${TARGET_ENVIRONMENT}" -detailed-exitcode
