@@ -10,29 +10,41 @@ on:
       - 'src/Misha.Api/Dockerfile'
       - '.github/workflows/aws-ecs-deploy.yml'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'ECS environment to deploy'
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: aws-ecs-dev
+  group: aws-ecs-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 env:
   AWS_REGION: eu-central-1
-  ECR_REPOSITORY: misha-dev-api
-  ECS_CLUSTER: misha-dev
-  ECS_SERVICE: misha-dev-api
-  ECS_TASK_DEFINITION: misha-dev-api
+  DEPLOY_ENV: ${{ inputs.environment || 'dev' }}
+  ECR_REPOSITORY: misha-${{ inputs.environment || 'dev' }}-api
+  ECS_CLUSTER: misha-${{ inputs.environment || 'dev' }}
+  ECS_SERVICE: misha-${{ inputs.environment || 'dev' }}-api
+  ECS_TASK_DEFINITION: misha-${{ inputs.environment || 'dev' }}-api
   CONTAINER_NAME: api
-  COGNITO_USER_POOL_NAME: dev-misha
+  COGNITO_USER_POOL_NAME: ${{ inputs.environment || 'dev' }}-misha
   COGNITO_API_IDENTIFIER: https://misha-api
+  APP_SECRET_NAME: misha-${{ inputs.environment || 'dev' }}/application
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: aws-dev
+    environment: aws-${{ inputs.environment || 'dev' }}
 
     steps:
       - name: Checkout
@@ -61,16 +73,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id 'misha-dev/application' --query 'SecretString' --output text)
+          SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "$APP_SECRET_NAME" --query 'SecretString' --output text)
           SECRET_JSON="$SECRET_JSON" python3 - <<'PY'
           import json, os
           raw = os.environ.get("SECRET_JSON", "")
+          secret_name = os.environ.get("APP_SECRET_NAME", "application secret")
           if not raw or raw == "None":
-              raise SystemExit("misha-dev/application has no SecretString version. Populate the watchlist provider configuration before ECS deployment.")
+              raise SystemExit(f"{secret_name} has no SecretString version. Populate the watchlist provider configuration before ECS deployment.")
           try:
               secret = json.loads(raw)
           except json.JSONDecodeError as exc:
-              raise SystemExit(f"misha-dev/application does not contain valid JSON: {exc}") from exc
+              raise SystemExit(f"{secret_name} does not contain valid JSON: {exc}") from exc
           provider = str(secret.get("WatchlistProviderName", "")).strip()
           if not provider:
               raise SystemExit("WatchlistProviderName is required.")
@@ -83,7 +96,7 @@ jobs:
               required = ("WatchlistBaseUrl", "WatchlistEndpoint")
               missing = [name for name in required if not str(secret.get(name, "")).strip()]
               if missing:
-                  raise SystemExit("misha-dev/application is missing required watchlist fields: " + ", ".join(missing))
+                  raise SystemExit(f"{secret_name} is missing required watchlist fields: " + ", ".join(missing))
               base_url = str(secret["WatchlistBaseUrl"]).strip()
               if not base_url.lower().startswith("https://"):
                   raise SystemExit("WatchlistBaseUrl must use HTTPS.")
@@ -142,7 +155,7 @@ jobs:
       - name: Verify deployed API health and authorization boundary
         run: |
           set -euo pipefail
-          ALB_DNS=$(aws elbv2 describe-load-balancers --names misha-dev-alb --query 'LoadBalancers[0].DNSName' --output text)
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names "misha-${DEPLOY_ENV}-alb" --query 'LoadBalancers[0].DNSName' --output text)
           BASE_URL="http://${ALB_DNS}"
 
           echo '=== LIVE ==='
@@ -153,7 +166,7 @@ jobs:
           curl --fail --silent --show-error --max-time 10 -D /tmp/ready.headers -o /tmp/ready.body "${BASE_URL}/health/ready"
           grep -q '^HTTP/.* 200 ' /tmp/ready.headers
 
-          echo '=== WATCHLIST DEV-MOCK ==='
+          echo '=== WATCHLIST ==='
           curl --fail --silent --show-error --max-time 10 -D /tmp/watchlist.headers -o /tmp/watchlist.body "${BASE_URL}/health/watchlist"
           grep -q '^HTTP/.* 200 ' /tmp/watchlist.headers
           grep -q '"healthy":"healthy"\|"status":"healthy"' /tmp/watchlist.body
