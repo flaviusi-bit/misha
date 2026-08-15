@@ -1,0 +1,114 @@
+name: AWS Terraform State Reconcile
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type RECONCILE to remove the known worker log-group taint"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-terraform-state-reconcile-dev
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: ${{ inputs.confirm == 'RECONCILE' }}
+    runs-on: ubuntu-latest
+    environment: aws-dev
+
+    defaults:
+      run:
+        working-directory: infrastructure/terraform
+
+    steps:
+      - name: Require main branch
+        working-directory: .
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "ERROR: State reconciliation must be dispatched from main."
+            echo "Selected ref: $GITHUB_REF"
+            exit 1
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate deployment role configuration
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          test -n "$AWS_DEPLOY_ROLE_ARN" || {
+            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
+            exit 1
+          }
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubActionsTerraformStateReconcile
+
+      - name: Verify AWS identity
+        working-directory: .
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.10.x'
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Inspect worker log-group state
+        run: |
+          set -euo pipefail
+          terraform state show aws_cloudwatch_log_group.worker > worker-log-group.state
+          cat worker-log-group.state
+
+      - name: Remove worker log-group taint if present
+        run: |
+          set -euo pipefail
+          if grep -qi 'tainted' worker-log-group.state; then
+            echo "Worker log group is tainted; removing only the Terraform taint marker."
+            terraform untaint aws_cloudwatch_log_group.worker
+          else
+            echo "Worker log group is not tainted; no state mutation required."
+          fi
+
+      - name: Re-read worker log-group state
+        run: |
+          set -euo pipefail
+          terraform state show aws_cloudwatch_log_group.worker
+          if terraform state show aws_cloudwatch_log_group.worker | grep -qi 'tainted'; then
+            echo "ERROR: worker log group remains tainted after reconciliation."
+            exit 1
+          fi
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Reject worker log-group replacement
+        run: |
+          set -euo pipefail
+          terraform show -json tfplan > tfplan.json
+          if jq -e '.resource_changes[]? | select(.address == "aws_cloudwatch_log_group.worker") | (.change.actions | index("delete")) != null' tfplan.json >/dev/null; then
+            echo "ERROR: Terraform still plans to delete aws_cloudwatch_log_group.worker."
+            exit 1
+          fi
+          echo "Worker log group is not scheduled for deletion."
