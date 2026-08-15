@@ -52,28 +52,53 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+locals {
+  nat_by_index = {
+    for i, az in local.azs : tostring(i) => az
+  }
+}
+
 resource "aws_eip" "nat" {
-  domain = "vpc"
+  for_each = local.nat_by_index
+  domain   = "vpc"
 }
 
 resource "aws_nat_gateway" "this" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = values(aws_subnet.public)[0].id
+  for_each      = local.nat_by_index
+  allocation_id = aws_eip.nat[each.key].id
+  subnet_id     = aws_subnet.public[each.value].id
   depends_on    = [aws_internet_gateway.this]
 }
 
 resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.this.id
+  for_each = local.nat_by_index
+  vpc_id   = aws_vpc.this.id
+
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.this.id
+    nat_gateway_id = aws_nat_gateway.this[each.key].id
   }
 }
 
 resource "aws_route_table_association" "private" {
   for_each       = aws_subnet.private
   subnet_id      = each.value.id
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.private[tostring(index(local.azs, each.key))].id
+}
+
+moved {
+  from = aws_eip.nat
+  to   = aws_eip.nat["0"]
+}
+
+moved {
+  from = aws_nat_gateway.this
+  to   = aws_nat_gateway.this["0"]
+}
+
+moved {
+  from = aws_route_table.private
+  to   = aws_route_table.private["0"]
 }
 
 resource "aws_security_group" "alb" {
