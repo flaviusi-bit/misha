@@ -56,16 +56,29 @@ resource "aws_iam_role_policy" "github_actions_worker_logs" {
   })
 }
 
+# IAM policy writes are eventually consistent. Terraform's dependency graph
+# guarantees ordering, but AWS can still reject the immediately-following
+# API call while the new identity policy is propagating. Wait once after the
+# policy is materialized so the log-group update is deterministic.
+resource "terraform_data" "github_actions_worker_logs_propagation" {
+  triggers_replace = [aws_iam_role_policy.github_actions_worker_logs.id]
+
+  provisioner "local-exec" {
+    command = "sleep 60"
+  }
+
+  depends_on = [aws_iam_role_policy.github_actions_worker_logs]
+}
+
 resource "aws_cloudwatch_log_group" "worker" {
   name              = "/ecs/${local.name}/worker"
   retention_in_days = 30
 
-  # Both policies must be reconciled before Terraform operates on the
-  # existing worker log group. The dedicated worker policy is authoritative
-  # for this resource's CloudWatch Logs lifecycle permissions.
+  # The dedicated worker policy must be created and allowed time to propagate
+  # before Terraform operates on the existing worker log group.
   depends_on = [
     aws_iam_role_policy.github_actions_deploy,
-    aws_iam_role_policy.github_actions_worker_logs
+    terraform_data.github_actions_worker_logs_propagation
   ]
 }
 
