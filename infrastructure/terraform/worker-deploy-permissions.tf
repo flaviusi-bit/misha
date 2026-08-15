@@ -43,6 +43,7 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
           "iam:GetRolePolicy",
           "iam:ListRolePolicies",
           "iam:ListAttachedRolePolicies",
+          "iam:ListInstanceProfilesForRole",
           "iam:TagRole",
           "iam:UntagRole",
           "iam:PassRole"
