@@ -76,7 +76,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ecr:UploadLayerPart"
         ], Resource = [
         aws_ecr_repository.api.arn,
-        aws_ecr_repository.worker.arn,
+        "arn:aws:ecr:${var.aws_region}:576984879588:repository/${local.name}-worker",
       ] },
       { Effect = "Allow", Action = [
         "ecs:DescribeClusters",
@@ -259,7 +259,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         aws_iam_role.github_actions_deploy.arn,
         aws_iam_role.ecs_execution.arn,
         aws_iam_role.ecs_task.arn,
-        aws_iam_role.ecs_worker_task.arn,
+        "arn:aws:iam::576984879588:role/${local.name}-ecs-worker-task",
         "arn:aws:iam::576984879588:role/${local.name}-backup"
       ] },
       { Effect = "Allow", Action = ["iam:CreateOpenIDConnectProvider"], Resource = "*" },
@@ -273,7 +273,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
       { Effect = "Allow", Action = ["iam:PassRole"], Resource = [
         aws_iam_role.ecs_execution.arn,
         aws_iam_role.ecs_task.arn,
-        aws_iam_role.ecs_worker_task.arn,
+        "arn:aws:iam::576984879588:role/${local.name}-ecs-worker-task",
         "arn:aws:iam::576984879588:role/${local.name}-backup"
       ] },
       { Effect = "Allow", Action = [
@@ -296,6 +296,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
       ], Resource = "*" },
       { Effect = "Allow", Action = [
         "cloudwatch:DescribeAlarms",
+        "cloudwatch:ListTagsForResource",
         "cloudwatch:PutMetricAlarm",
         "cloudwatch:DeleteAlarms",
         "cloudwatch:TagResource",
