@@ -13,6 +13,7 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
         Effect = "Allow"
         Action = [
           "ecr:CreateRepository",
+          "ecr:DescribeRepositories",
           "ecr:TagResource"
         ]
         Resource = "arn:aws:ecr:${var.aws_region}:576984879588:repository/${local.name}-worker"
@@ -21,7 +22,12 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
         Effect = "Allow"
         Action = [
           "logs:CreateLogGroup",
-          "logs:TagResource"
+          "logs:DeleteLogGroup",
+          "logs:ListTagsForResource",
+          "logs:PutRetentionPolicy",
+          "logs:DeleteRetentionPolicy",
+          "logs:TagResource",
+          "logs:UntagResource"
         ]
         Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker"
       },
@@ -36,6 +42,7 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
           "iam:DeleteRolePolicy",
           "iam:GetRolePolicy",
           "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies",
           "iam:TagRole",
           "iam:UntagRole",
           "iam:PassRole"
@@ -48,6 +55,7 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
           "cloudwatch:PutMetricAlarm",
           "cloudwatch:DeleteAlarms",
           "cloudwatch:DescribeAlarms",
+          "cloudwatch:ListTagsForResource",
           "cloudwatch:TagResource",
           "cloudwatch:UntagResource"
         ]
