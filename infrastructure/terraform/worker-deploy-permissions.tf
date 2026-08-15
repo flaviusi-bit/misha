@@ -21,7 +21,13 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
       {
         Effect = "Allow"
         Action = [
-          "logs:CreateLogGroup",
+          "logs:CreateLogGroup"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:DeleteLogGroup",
           "logs:ListTagsForResource",
           "logs:PutRetentionPolicy",
