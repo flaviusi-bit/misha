@@ -57,6 +57,19 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
   })
 }
 
+# IAM policy writes are eventually consistent. Keep the worker resource graph
+# behind a short propagation barrier so ECR/CloudWatch/IAM APIs do not race the
+# newly-created inline bootstrap policy.
+resource "terraform_data" "worker_iam_policy_propagation" {
+  triggers_replace = [sha256(aws_iam_role_policy.github_actions_worker_bootstrap.policy)]
+
+  depends_on = [aws_iam_role_policy.github_actions_worker_bootstrap]
+
+  provisioner "local-exec" {
+    command = "sleep 20"
+  }
+}
+
 resource "aws_iam_role_policy" "github_actions_worker_deploy" {
   name = "${local.name}-github-actions-worker-deploy"
   role = aws_iam_role.github_actions_deploy.id
