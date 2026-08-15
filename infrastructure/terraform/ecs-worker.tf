@@ -30,13 +30,43 @@ resource "aws_ecr_lifecycle_policy" "worker" {
   depends_on = [aws_iam_role_policy.github_actions_deploy]
 }
 
+# Keep worker log-group permissions independently managed from the large
+# deployment policy. This guarantees the permissions required to reconcile
+# the existing log group are materialized before Terraform updates it.
+resource "aws_iam_role_policy" "github_actions_worker_logs" {
+  name = "${local.name}-github-actions-worker-logs"
+  role = aws_iam_role.github_actions_deploy.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:DeleteRetentionPolicy",
+        "logs:DescribeLogGroups",
+        "logs:ListTagsForResource",
+        "logs:PutRetentionPolicy",
+        "logs:TagResource",
+        "logs:UntagResource"
+      ]
+      Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker"
+    }]
+  })
+}
+
 resource "aws_cloudwatch_log_group" "worker" {
   name              = "/ecs/${local.name}/worker"
   retention_in_days = 30
 
-  # The deployment role must have the current CloudWatch Logs permissions
-  # before Terraform can reconcile an existing/tainted log group.
-  depends_on = [aws_iam_role_policy.github_actions_deploy]
+  # Both policies must be reconciled before Terraform operates on the
+  # existing worker log group. The dedicated worker policy is authoritative
+  # for this resource's CloudWatch Logs lifecycle permissions.
+  depends_on = [
+    aws_iam_role_policy.github_actions_deploy,
+    aws_iam_role_policy.github_actions_worker_logs
+  ]
 }
 
 resource "aws_iam_role" "ecs_worker_task" {
