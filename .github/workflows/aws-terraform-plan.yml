@@ -9,6 +9,16 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Terraform environment to plan'
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
 
 permissions:
   contents: read
@@ -17,7 +27,7 @@ permissions:
 jobs:
   terraform-plan:
     runs-on: ubuntu-latest
-    environment: aws-dev
+    environment: aws-${{ inputs.environment || 'dev' }}
 
     steps:
       - name: Checkout
@@ -28,7 +38,7 @@ jobs:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
           test -n "$AWS_DEPLOY_ROLE_ARN" || {
-            echo "AWS_DEPLOY_ROLE_ARN repository variable is not configured."
+            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
             exit 1
           }
 
@@ -61,4 +71,6 @@ jobs:
 
       - name: Terraform plan
         working-directory: infrastructure/terraform
-        run: terraform plan -input=false
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: terraform plan -input=false -var="environment=${TARGET_ENVIRONMENT}"
