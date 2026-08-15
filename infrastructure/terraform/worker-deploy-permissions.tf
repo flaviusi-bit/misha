@@ -22,8 +22,7 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
         Effect = "Allow"
         Action = [
           "logs:CreateLogGroup",
-          "logs:DescribeLogGroups",
-          "logs:TagResource"
+          "logs:DescribeLogGroups"
         ]
         Resource = "*"
       },
@@ -37,7 +36,7 @@ resource "aws_iam_role_policy" "github_actions_worker_bootstrap" {
           "logs:TagResource",
           "logs:UntagResource"
         ]
-        Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker"
+        Resource = "arn:aws:logs:${var.aws_region}:576984879588:log-group:/ecs/${local.name}/worker:*"
       },
       {
         Effect = "Allow"
