@@ -1,20 +1,9 @@
 name: AWS ECS Worker Deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/Misha.Worker/**'
-      - 'src/Misha.Application/**'
-      - 'src/Misha.Infrastructure/**'
-      - 'src/Misha.Domain/**'
-      - 'Misha.slnx'
-      - 'global.json'
-      - '.dockerignore'
-      - 'infrastructure/terraform/ecs-worker.tf'
-      - 'infrastructure/terraform/worker-deploy-permissions.tf'
-      - 'infrastructure/terraform/variables.tf'
-      - '.github/workflows/aws-ecs-worker-deploy.yml'
+  workflow_run:
+    workflows: ["AWS Terraform Apply"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -35,12 +24,18 @@ env:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     environment: aws-dev
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Validate deployment role configuration
         env:
