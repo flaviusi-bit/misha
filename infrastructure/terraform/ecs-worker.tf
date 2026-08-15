@@ -33,6 +33,10 @@ resource "aws_ecr_lifecycle_policy" "worker" {
 resource "aws_cloudwatch_log_group" "worker" {
   name              = "/ecs/${local.name}/worker"
   retention_in_days = 30
+
+  # The deployment role must have the current CloudWatch Logs permissions
+  # before Terraform can reconcile an existing/tainted log group.
+  depends_on = [aws_iam_role_policy.github_actions_deploy]
 }
 
 resource "aws_iam_role" "ecs_worker_task" {
