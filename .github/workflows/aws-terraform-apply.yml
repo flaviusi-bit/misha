@@ -64,6 +64,17 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
+      # The deployment role owns the Terraform-managed worker bootstrap policy.
+      # When that policy itself changes, a normal full refresh can fail before
+      # Terraform gets the opportunity to apply the new permissions. Apply the
+      # permission resources first; the subsequent full plan can then refresh
+      # the worker resources successfully.
+      - name: Bootstrap Terraform deployment permissions
+        run: |
+          terraform apply -input=false -auto-approve \
+            -target=aws_iam_role_policy.github_actions_worker_bootstrap \
+            -target=aws_iam_role_policy.github_actions_deploy
+
       - name: Terraform plan
         run: terraform plan -input=false -out=tfplan
 
