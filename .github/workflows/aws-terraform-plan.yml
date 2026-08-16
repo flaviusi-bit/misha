@@ -106,8 +106,23 @@ jobs:
           ROUTE53_ZONE_ID: ${{ inputs.route53_zone_id || '' }}
           FINAL_SNAPSHOT_IDENTIFIER: ${{ inputs.final_snapshot_identifier || '' }}
         run: |
-          terraform plan -input=false \
-            -var="environment=${TARGET_ENVIRONMENT}" \
-            -var="domain_name=${DOMAIN_NAME}" \
-            -var="route53_zone_id=${ROUTE53_ZONE_ID}" \
+          set -euo pipefail
+          PLAN_ARGS=(
+            -input=false
+            -var="environment=${TARGET_ENVIRONMENT}"
+            -var="domain_name=${DOMAIN_NAME}"
+            -var="route53_zone_id=${ROUTE53_ZONE_ID}"
             -var="final_snapshot_identifier=${FINAL_SNAPSHOT_IDENTIFIER}"
+          )
+
+          # PR plans must be non-mutating and cannot depend on IAM permissions
+          # introduced by the same PR. The apply workflow bootstraps those
+          # permissions before its real refresh/plan. For PR validation, disable
+          # state refresh so Terraform can evaluate the proposed configuration
+          # without requiring the new CloudWatch dashboard read permission to
+          # already exist in AWS.
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            PLAN_ARGS+=( -refresh=false )
+          fi
+
+          terraform plan "${PLAN_ARGS[@]}"
