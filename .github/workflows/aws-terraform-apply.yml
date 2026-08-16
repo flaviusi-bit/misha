@@ -127,13 +127,14 @@ jobs:
             -var="final_snapshot_identifier=${FINAL_SNAPSHOT_IDENTIFIER}" \
             -out=tfplan
 
-      # The deployment role can modify its own IAM policy. Those changes do not
-      # become effective inside the already-issued OIDC session. Bootstrap the
-      # policy first, then explicitly assume the role again before the real apply.
-      - name: Bootstrap deployment IAM policy
+      # The deployment role can modify its own IAM policies. Those changes do not
+      # become effective inside the already-issued OIDC session. Bootstrap both
+      # policies first, then explicitly assume the role again before the real apply.
+      - name: Bootstrap deployment IAM policies
         run: |
           terraform apply -input=false -auto-approve \
-            -target=aws_iam_role_policy.github_actions_deploy
+            -target=aws_iam_role_policy.github_actions_deploy \
+            -target=aws_iam_role_policy.github_actions_observability_route_refresh
 
       - name: Wait for IAM policy propagation
         working-directory: .
@@ -148,7 +149,15 @@ jobs:
 
       - name: Verify fresh AWS identity
         working-directory: .
-        run: aws sts get-caller-identity
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+          aws iam simulate-principal-policy \
+            --policy-source-arn "${{ vars.AWS_DEPLOY_ROLE_ARN }}" \
+            --action-names cloudwatch:GetDashboard cloudwatch:PutDashboard cloudwatch:DeleteDashboard ec2:ReplaceRouteTableAssociation \
+            --resource-arns '*' \
+            --query 'EvaluationResults[].{Action:EvalActionName,Decision:EvalDecision}' \
+            --output table
 
       - name: Terraform re-plan with fresh credentials
         env:
