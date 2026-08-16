@@ -4,9 +4,10 @@ public sealed class Application
 {
     private Application() { }
 
-    private Application(Guid id, string applicantReference, string? idempotencyKey)
+    private Application(Guid id, Guid applicantId, string applicantReference, string? idempotencyKey)
     {
         Id = id;
+        ApplicantId = applicantId;
         ApplicantReference = applicantReference;
         IdempotencyKey = idempotencyKey;
         Status = ApplicationStatus.Draft;
@@ -14,6 +15,8 @@ public sealed class Application
     }
 
     public Guid Id { get; private set; }
+    public Guid ApplicantId { get; private set; }
+    // Retained as an immutable request snapshot for compatibility and audit readability.
     public string ApplicantReference { get; private set; } = string.Empty;
     public string? IdempotencyKey { get; private set; }
     public ApplicationStatus Status { get; private set; }
@@ -27,8 +30,11 @@ public sealed class Application
     // PostgreSQL maps this property to the implicit xmin column for optimistic concurrency.
     public uint Version { get; private set; }
 
-    public static Application Create(string applicantReference, string? idempotencyKey = null)
+    public static Application Create(Guid applicantId, string applicantReference, string? idempotencyKey = null)
     {
+        if (applicantId == Guid.Empty)
+            throw new ArgumentException("Applicant id is required.", nameof(applicantId));
+
         if (string.IsNullOrWhiteSpace(applicantReference))
             throw new ArgumentException("Applicant reference is required.", nameof(applicantReference));
 
@@ -36,13 +42,16 @@ public sealed class Application
         if (normalizedKey is not null && normalizedKey.Length > 200)
             throw new ArgumentException("Idempotency key must be 200 characters or fewer.", nameof(idempotencyKey));
 
-        return new Application(Guid.NewGuid(), applicantReference.Trim(), normalizedKey);
+        return new Application(Guid.NewGuid(), applicantId, applicantReference.Trim(), normalizedKey);
     }
+
+    // Test/compatibility factory for callers that do not yet have persistence-backed applicant identity.
+    public static Application Create(string applicantReference, string? idempotencyKey = null) =>
+        Create(Guid.NewGuid(), applicantReference, idempotencyKey);
 
     public void Submit()
     {
         EnsureStatus(ApplicationStatus.Draft);
-
         Status = ApplicationStatus.Submitted;
         SubmittedAtUtc = DateTimeOffset.UtcNow;
     }
@@ -50,7 +59,6 @@ public sealed class Application
     public void StartProcessing()
     {
         EnsureStatus(ApplicationStatus.Submitted);
-
         Status = ApplicationStatus.Processing;
         ProcessingStartedAtUtc = DateTimeOffset.UtcNow;
     }
@@ -58,7 +66,6 @@ public sealed class Application
     public void Approve()
     {
         EnsureStatus(ApplicationStatus.Processing);
-
         Status = ApplicationStatus.Approved;
         DecidedAtUtc = DateTimeOffset.UtcNow;
         RefusalReason = null;
@@ -70,7 +77,6 @@ public sealed class Application
             throw new ArgumentException("A refusal reason is required.", nameof(reason));
 
         EnsureStatus(ApplicationStatus.Processing);
-
         Status = ApplicationStatus.Refused;
         DecidedAtUtc = DateTimeOffset.UtcNow;
         RefusalReason = reason.Trim();

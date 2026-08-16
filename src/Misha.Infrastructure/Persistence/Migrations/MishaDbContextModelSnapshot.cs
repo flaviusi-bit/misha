@@ -18,10 +18,21 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             .HasAnnotation("ProductVersion", "10.0.0")
             .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+        modelBuilder.Entity("Misha.Domain.Applicants.Applicant", b =>
+        {
+            b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<string>("ExternalReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+            b.HasKey("Id");
+            b.HasIndex("ExternalReference").IsUnique();
+            b.ToTable("applicants");
+        });
+
         modelBuilder.Entity("Misha.Domain.Applications.Application", b =>
         {
             b.Property<Guid>("Id").HasColumnType("uuid");
             b.Property<uint>("Version").IsRowVersion().HasColumnName("xmin");
+            b.Property<Guid>("ApplicantId").HasColumnType("uuid");
             b.Property<string>("ApplicantReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<string>("IdempotencyKey").HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
@@ -32,6 +43,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("RefusalReason").HasMaxLength(1000).HasColumnType("character varying(1000)");
             b.Property<int>("Status").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
             b.HasKey("Id");
+            b.HasIndex("ApplicantId");
             b.HasIndex("ApplicantReference");
             b.HasIndex("IdempotencyKey").IsUnique();
             b.HasIndex("Status");
@@ -226,6 +238,15 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("AggregateId", "OccurredAtUtc");
             b.HasIndex("PublishedAtUtc", "OccurredAtUtc");
             b.ToTable("outbox_messages");
+        });
+
+        modelBuilder.Entity("Misha.Domain.Applications.Application", b =>
+        {
+            b.HasOne("Misha.Domain.Applicants.Applicant", null)
+                .WithMany()
+                .HasForeignKey("ApplicantId")
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired();
         });
 
 #pragma warning restore 612, 618

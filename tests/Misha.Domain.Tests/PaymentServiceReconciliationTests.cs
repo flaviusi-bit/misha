@@ -1,5 +1,6 @@
 using Misha.Application.Applications;
 using Misha.Application.Payments;
+using Misha.Domain.Applicants;
 using Misha.Domain.Payments;
 using DomainApplication = Misha.Domain.Applications.Application;
 using Xunit;
@@ -80,6 +81,9 @@ public sealed class PaymentServiceReconciliationTests
 
     private sealed class FakeApplicationRepository : IApplicationRepository
     {
+        public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken) =>
+            Task.FromResult(Applicant.Create(externalReference));
+
         public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult<DomainApplication?>(null);
 

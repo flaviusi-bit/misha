@@ -26,7 +26,8 @@ public sealed class ApplicationService(
             }
         }
 
-        var application = Misha.Domain.Applications.Application.Create(applicantReference, idempotencyKey);
+        var applicant = await repository.GetOrCreateApplicantAsync(applicantReference, cancellationToken);
+        var application = Misha.Domain.Applications.Application.Create(applicant.Id, applicant.ExternalReference, idempotencyKey);
         var persisted = await repository.AddOrGetExistingAsync(application, cancellationToken);
 
         if (!string.Equals(persisted.ApplicantReference, applicantReference.Trim(), StringComparison.Ordinal))

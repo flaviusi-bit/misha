@@ -1,6 +1,7 @@
 using Misha.Application.Applications;
 using Misha.Application.Messaging;
 using Misha.Application.Notifications;
+using Misha.Domain.Applicants;
 using Misha.Domain.Applications;
 using Misha.Domain.Notifications;
 using Xunit;
@@ -36,6 +37,9 @@ public sealed class ApplicationLifecycleChangedHandlerTests
 
     private sealed class RecordingApplicationRepository(DomainApplication application) : IApplicationRepository
     {
+        public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken) =>
+            Task.FromResult(Applicant.Create(externalReference));
+
         public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult<DomainApplication?>(id == application.Id ? application : null);
 
