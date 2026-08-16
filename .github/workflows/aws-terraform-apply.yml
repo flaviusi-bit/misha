@@ -128,17 +128,37 @@ jobs:
             echo "CloudWatch dashboard is not tainted; no state mutation required."
           fi
 
-      # Terraform refuses a targeted operation when moved resource instances
-      # are outside the target set. These networking resources are the exact
-      # moved instances reported by Terraform during the previous run.
-      - name: Bootstrap deployment IAM policy
+      # Do not use Terraform -target here. Terraform 1.10 rejects the targeted
+      # IAM bootstrap because moved networking instances must also be selected.
+      # The previous attempt proved that selecting those networking resources
+      # can execute real destroy operations before the full plan is reviewed.
+      # Bootstrap only the narrowly required EIP permission through IAM, then
+      # re-assume the role so the full Terraform plan runs without targeting.
+      - name: Bootstrap EIP cleanup IAM permission
+        working-directory: .
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
           set -euo pipefail
-          terraform apply -input=false -auto-approve \
-            -target=aws_iam_role_policy.github_actions_deploy \
-            -target=aws_eip.nat \
-            -target=aws_nat_gateway.this \
-            -target=aws_route_table.private
+          ROLE_NAME="${AWS_DEPLOY_ROLE_ARN##*/}"
+          POLICY_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-eip-cleanup"
+          cat > /tmp/eip-cleanup-policy.json <<'EOF'
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": ["ec2:DisassociateAddress"],
+                "Resource": "*"
+              }
+            ]
+          }
+          EOF
+          aws iam put-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --policy-document file:///tmp/eip-cleanup-policy.json
 
       - name: Wait for IAM policy propagation
         working-directory: .
