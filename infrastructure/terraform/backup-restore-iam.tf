@@ -22,8 +22,8 @@ resource "aws_iam_role_policy" "github_actions_backup_restore_testing" {
         Resource = "*"
       },
       {
-        Effect = "Allow"
-        Action = ["iam:CreateServiceLinkedRole"]
+        Effect   = "Allow"
+        Action   = ["iam:CreateServiceLinkedRole"]
         Resource = "*"
         Condition = {
           StringEquals = {
