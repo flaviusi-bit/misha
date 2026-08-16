@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MishaApplication = Misha.Domain.Applications.Application;
+using Misha.Domain.Applicants;
 using Misha.Domain.Applications;
 using Misha.Domain.Decisions;
 using Misha.Domain.Documents;
@@ -13,6 +14,7 @@ namespace Misha.Infrastructure.Persistence;
 
 public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : DbContext(options)
 {
+    public DbSet<Applicant> Applicants => Set<Applicant>();
     public DbSet<MishaApplication> Applications => Set<MishaApplication>();
     public DbSet<ApplicationLifecycleAudit> ApplicationLifecycleAudits => Set<ApplicationLifecycleAudit>();
     public DbSet<DecisionAudit> DecisionAudits => Set<DecisionAudit>();
@@ -28,18 +30,28 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var applicant = modelBuilder.Entity<Applicant>();
+        applicant.ToTable("applicants");
+        applicant.HasKey(x => x.Id);
+        applicant.Property(x => x.ExternalReference).HasMaxLength(200).IsRequired();
+        applicant.Property(x => x.CreatedAtUtc).IsRequired();
+        applicant.HasIndex(x => x.ExternalReference).IsUnique();
+
         var application = modelBuilder.Entity<MishaApplication>();
         application.ToTable("applications");
         application.HasKey(x => x.Id);
+        application.Property(x => x.ApplicantId).IsRequired();
         application.Property(x => x.ApplicantReference).HasMaxLength(200).IsRequired();
         application.Property(x => x.IdempotencyKey).HasMaxLength(200);
         application.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
         application.Property(x => x.CreatedAtUtc).IsRequired();
         application.Property(x => x.RefusalReason).HasMaxLength(1000);
         application.Property(x => x.Version).IsRowVersion();
+        application.HasIndex(x => x.ApplicantId);
         application.HasIndex(x => x.ApplicantReference);
         application.HasIndex(x => x.Status);
         application.HasIndex(x => x.IdempotencyKey).IsUnique();
+        application.HasOne<Applicant>().WithMany().HasForeignKey(x => x.ApplicantId).OnDelete(DeleteBehavior.Restrict);
 
         var lifecycleAudit = modelBuilder.Entity<ApplicationLifecycleAudit>();
         lifecycleAudit.ToTable("application_lifecycle_audits");
