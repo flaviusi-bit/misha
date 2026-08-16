@@ -5,10 +5,13 @@ using Misha.Application.Messaging;
 using Misha.Application.Notifications;
 using Misha.Infrastructure.Messaging;
 using Misha.Infrastructure.Notifications;
+using Misha.Infrastructure.Observability;
 using Misha.Infrastructure.Persistence;
 using Misha.Worker;
 
 var builder = new HostApplicationBuilder(args);
+
+builder.Services.AddMishaOpenTelemetry(builder.Configuration, "misha-worker", includeAspNetCoreInstrumentation: false);
 
 var connectionString = builder.Configuration.GetConnectionString("Misha");
 if (string.IsNullOrWhiteSpace(connectionString))
