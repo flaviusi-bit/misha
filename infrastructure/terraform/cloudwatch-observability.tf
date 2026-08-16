@@ -119,8 +119,6 @@ resource "aws_cloudwatch_metric_alarm" "queue_age" {
 resource "aws_cloudwatch_dashboard" "platform" {
   dashboard_name = "${local.name}-platform-health"
 
-  depends_on = [aws_iam_role_policy.github_actions_observability_network]
-
   dashboard_body = jsonencode({
     widgets = [
       {
