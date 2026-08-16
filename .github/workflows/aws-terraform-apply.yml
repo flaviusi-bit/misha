@@ -128,6 +128,29 @@ jobs:
             echo "CloudWatch dashboard is not tainted; no state mutation required."
           fi
 
+      # Bootstrap only the existing deployment policy. Do NOT target the EIP,
+      # NAT gateway, or route table: doing so previously caused real destroys
+      # before the full plan was reviewed. The policy already contains the
+      # Terraform IAM-management permission, so this targeted update is limited
+      # to granting ec2:DisassociateAddress before the full apply.
+      - name: Bootstrap deployment IAM policy
+        run: terraform apply -input=false -auto-approve -target=aws_iam_role_policy.github_actions_deploy
+
+      - name: Wait for IAM policy propagation
+        working-directory: .
+        run: sleep 20
+
+      - name: Re-assume AWS role with fresh credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubActionsTerraformApplyFresh
+
+      - name: Verify fresh AWS identity
+        working-directory: .
+        run: aws sts get-caller-identity
+
       - name: Terraform plan
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
