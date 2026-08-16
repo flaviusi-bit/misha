@@ -1,5 +1,6 @@
 using Misha.Application.Applications;
 using Misha.Application.Documents;
+using Misha.Domain.Applicants;
 using Misha.Domain.Documents;
 using Xunit;
 using DomainApplication = Misha.Domain.Applications.Application;
@@ -76,6 +77,9 @@ public sealed class DocumentServiceTests
 
     private sealed class FakeApplicationRepository(Guid existingId) : IApplicationRepository
     {
+        public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken) =>
+            Task.FromResult(Applicant.Create(externalReference));
+
         public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult<DomainApplication?>(id == existingId ? DomainApplication.Create("test") : null);
 
