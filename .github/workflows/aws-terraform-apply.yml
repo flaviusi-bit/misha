@@ -119,10 +119,13 @@ jobs:
       - name: Clear stale CloudWatch dashboard taint
         run: |
           set -euo pipefail
-          if terraform state show -no-color aws_cloudwatch_dashboard.platform >/dev/null 2>&1; then
-            terraform state untaint aws_cloudwatch_dashboard.platform
+          terraform state show aws_cloudwatch_dashboard.platform > cloudwatch-dashboard.state
+          cat cloudwatch-dashboard.state
+          if grep -qi 'tainted' cloudwatch-dashboard.state; then
+            echo "CloudWatch dashboard is tainted; removing only the Terraform taint marker."
+            terraform untaint aws_cloudwatch_dashboard.platform
           else
-            echo "CloudWatch dashboard is not present in state; nothing to untaint."
+            echo "CloudWatch dashboard is not tainted; no state mutation required."
           fi
 
       # The existing deployment policy is managed by Terraform and contains the
