@@ -34,7 +34,7 @@ public partial class AddApplicants : Migration
             type: "uuid",
             nullable: true);
 
-        migrationBuilder.Sql("INSERT INTO applicants (\"Id\", \"ExternalReference\", \"CreatedAtUtc\") SELECT gen_random_uuid(), \"ApplicantReference\", MIN(\"CreatedAtUtc\") FROM applications GROUP BY \"ApplicantReference\");
+        migrationBuilder.Sql("INSERT INTO applicants (\"Id\", \"ExternalReference\", \"CreatedAtUtc\") SELECT gen_random_uuid(), \"ApplicantReference\", MIN(\"CreatedAtUtc\") FROM applications GROUP BY \"ApplicantReference\"");
         migrationBuilder.Sql("UPDATE applications a SET \"ApplicantId\" = p.\"Id\" FROM applicants p WHERE p.\"ExternalReference\" = a.\"ApplicantReference\"");
 
         migrationBuilder.AlterColumn<Guid>(
