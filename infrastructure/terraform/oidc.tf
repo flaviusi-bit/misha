@@ -117,6 +117,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ec2:DeleteRoute",
         "ec2:AllocateAddress",
         "ec2:ReleaseAddress",
+        "ec2:DisassociateAddress",
         "ec2:CreateNatGateway",
         "ec2:DeleteNatGateway",
         "ec2:CreateSecurityGroup",
