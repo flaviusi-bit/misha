@@ -113,14 +113,13 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
-      # The first full plan needs permissions that are managed by Terraform.
-      # Bootstrap those policies before any full plan, wait for propagation,
-      # then obtain a fresh OIDC session for the real plan/apply.
-      - name: Bootstrap deployment IAM policies
+      # The existing deployment policy is managed by Terraform and contains the
+      # permissions needed by the first full plan. Update it before planning,
+      # wait for propagation, then obtain a fresh OIDC session.
+      - name: Bootstrap deployment IAM policy
         run: |
           terraform apply -input=false -auto-approve \
-            -target=aws_iam_role_policy.github_actions_deploy \
-            -target=aws_iam_role_policy.github_actions_observability_route_refresh
+            -target=aws_iam_role_policy.github_actions_deploy
 
       - name: Wait for IAM policy propagation
         working-directory: .
