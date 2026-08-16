@@ -91,7 +91,7 @@ resource "aws_backup_restore_testing_selection" "postgres" {
   protected_resource_type   = "RDS"
   protected_resource_arns   = [aws_db_instance.postgres.arn]
   iam_role_arn              = aws_iam_role.backup.arn
-  validation_window_hours  = 2
+  validation_window_hours   = 2
 
   depends_on = [aws_iam_role_policy_attachment.restore]
 }
