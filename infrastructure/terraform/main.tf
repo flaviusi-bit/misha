@@ -84,19 +84,45 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[var.environment == "prod" ? each.key : local.nat_azs[0]].id
 }
 
+# Preserve the historical singleton migration, then migrate the current
+# numeric for_each instances to stable Availability-Zone keys.
 moved {
   from = aws_eip.nat
+  to   = aws_eip.nat["0"]
+}
+moved {
+  from = aws_eip.nat["0"]
   to   = aws_eip.nat["eu-central-1a"]
+}
+moved {
+  from = aws_eip.nat["1"]
+  to   = aws_eip.nat["eu-central-1b"]
 }
 
 moved {
   from = aws_nat_gateway.this
+  to   = aws_nat_gateway.this["0"]
+}
+moved {
+  from = aws_nat_gateway.this["0"]
   to   = aws_nat_gateway.this["eu-central-1a"]
+}
+moved {
+  from = aws_nat_gateway.this["1"]
+  to   = aws_nat_gateway.this["eu-central-1b"]
 }
 
 moved {
   from = aws_route_table.private
+  to   = aws_route_table.private["0"]
+}
+moved {
+  from = aws_route_table.private["0"]
   to   = aws_route_table.private["eu-central-1a"]
+}
+moved {
+  from = aws_route_table.private["1"]
+  to   = aws_route_table.private["eu-central-1b"]
 }
 
 resource "aws_security_group" "alb" {
