@@ -6,8 +6,8 @@ resource "aws_iam_role_policy" "github_actions_backup_restore_testing" {
     Version   = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect    = "Allow"
+        Action    = [
           "backup:CreateRestoreTestingPlan",
           "backup:DeleteRestoreTestingPlan",
           "backup:GetRestoreTestingPlan",
