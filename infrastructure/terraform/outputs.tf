@@ -55,7 +55,12 @@ output "acm_certificate_arn" {
 }
 
 output "nat_gateway_id" {
-  value = aws_nat_gateway.this["0"].id
+  value = aws_nat_gateway.this[local.nat_azs[0]].id
+}
+
+output "nat_gateway_ids" {
+  description = "NAT Gateway IDs keyed by Availability Zone."
+  value       = { for az, gateway in aws_nat_gateway.this : az => gateway.id }
 }
 
 output "rds_endpoint" {
