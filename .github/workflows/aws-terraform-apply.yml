@@ -128,13 +128,17 @@ jobs:
             echo "CloudWatch dashboard is not tainted; no state mutation required."
           fi
 
-      # The existing deployment policy is managed by Terraform and contains the
-      # permissions needed by the first full plan. Update it before planning,
-      # wait for propagation, then obtain a fresh OIDC session.
+      # Terraform refuses a targeted operation when moved resource instances
+      # are outside the target set. These networking resources are the exact
+      # moved instances reported by Terraform during the previous run.
       - name: Bootstrap deployment IAM policy
         run: |
+          set -euo pipefail
           terraform apply -input=false -auto-approve \
-            -target=aws_iam_role_policy.github_actions_deploy
+            -target=aws_iam_role_policy.github_actions_deploy \
+            -target=aws_eip.nat \
+            -target=aws_nat_gateway.this \
+            -target=aws_route_table.private
 
       - name: Wait for IAM policy propagation
         working-directory: .
