@@ -299,7 +299,11 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "cloudwatch:TagResource",
         "cloudwatch:UntagResource"
       ], Resource = "arn:aws:cloudwatch:eu-central-1:576984879588:alarm:${local.name}-*" },
-      { Effect = "Allow", Action = ["cloudwatch:PutDashboard"], Resource = "*" }
+      { Effect = "Allow", Action = [
+        "cloudwatch:GetDashboard",
+        "cloudwatch:PutDashboard",
+        "cloudwatch:DeleteDashboard"
+      ], Resource = "*" }
     ]
   })
 }
