@@ -90,9 +90,22 @@ jobs:
         working-directory: infrastructure/terraform
         run: terraform init
 
+      - name: Capture Terraform format diff
+        working-directory: infrastructure/terraform
+        run: |
+          terraform fmt -write=false -diff -recursive > /tmp/terraform-fmt.diff || true
+          cat /tmp/terraform-fmt.diff
+
+      - name: Upload Terraform format diff
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-format-diff
+          path: /tmp/terraform-fmt.diff
+          if-no-files-found: error
+
       - name: Terraform format check
         working-directory: infrastructure/terraform
-        run: terraform fmt -check -diff -recursive
+        run: terraform fmt -check -recursive
 
       - name: Terraform validate
         working-directory: infrastructure/terraform
