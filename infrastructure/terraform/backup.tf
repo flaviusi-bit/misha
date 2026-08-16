@@ -1,7 +1,13 @@
 resource "terraform_data" "iam_policy_propagation" {
-  triggers_replace = [sha256(aws_iam_role_policy.github_actions_deploy.policy)]
+  triggers_replace = [
+    sha256(aws_iam_role_policy.github_actions_deploy.policy),
+    sha256(aws_iam_role_policy.github_actions_backup_restore_testing.policy),
+  ]
 
-  depends_on = [aws_iam_role_policy.github_actions_deploy]
+  depends_on = [
+    aws_iam_role_policy.github_actions_deploy,
+    aws_iam_role_policy.github_actions_backup_restore_testing,
+  ]
 
   provisioner "local-exec" {
     command = "sleep 20"
@@ -82,7 +88,7 @@ resource "aws_backup_restore_testing_plan" "application" {
   schedule_expression = "cron(0 4 ? * SUN *)"
   start_window_hours  = 4
 
-  depends_on = [aws_backup_selection.postgres]
+  depends_on = [terraform_data.iam_policy_propagation]
 }
 
 resource "aws_backup_restore_testing_selection" "postgres" {
@@ -93,5 +99,8 @@ resource "aws_backup_restore_testing_selection" "postgres" {
   iam_role_arn              = aws_iam_role.backup.arn
   validation_window_hours   = 2
 
-  depends_on = [aws_iam_role_policy_attachment.restore]
+  depends_on = [
+    aws_iam_role_policy_attachment.restore,
+    terraform_data.iam_policy_propagation,
+  ]
 }
