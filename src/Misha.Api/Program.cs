@@ -14,11 +14,14 @@ using Misha.Application.Policy;
 using Misha.Application.Watchlists;
 using Misha.Domain.Documents;
 using Misha.Infrastructure.Documents;
+using Misha.Infrastructure.Observability;
 using Misha.Infrastructure.Persistence;
 using Misha.Infrastructure.Storage;
 using Misha.Infrastructure.Watchlists;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddMishaOpenTelemetry(builder.Configuration, "misha-api", includeAspNetCoreInstrumentation: true);
 
 var connectionString = builder.Configuration.GetConnectionString("Misha");
 if (string.IsNullOrWhiteSpace(connectionString))
