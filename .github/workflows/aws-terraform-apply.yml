@@ -148,15 +148,7 @@ jobs:
 
       - name: Verify fresh AWS identity
         working-directory: .
-        run: |
-          set -euo pipefail
-          aws sts get-caller-identity
-          aws iam simulate-principal-policy \
-            --policy-source-arn "${{ vars.AWS_DEPLOY_ROLE_ARN }}" \
-            --action-names cloudwatch:PutDashboard ec2:ReplaceRouteTableAssociation \
-            --resource-arns '*' \
-            --query 'EvaluationResults[].{Action:EvalActionName,Decision:EvalDecision}' \
-            --output table
+        run: aws sts get-caller-identity
 
       - name: Terraform re-plan with fresh credentials
         env:
