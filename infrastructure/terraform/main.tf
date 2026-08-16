@@ -53,25 +53,23 @@ resource "aws_route_table_association" "public" {
 }
 
 locals {
-  nat_by_index = {
-    for i, az in local.azs : tostring(i) => az
-  }
+  nat_azs = var.environment == "prod" ? local.azs : [local.azs[0]]
 }
 
 resource "aws_eip" "nat" {
-  for_each = local.nat_by_index
+  for_each = toset(local.nat_azs)
   domain   = "vpc"
 }
 
 resource "aws_nat_gateway" "this" {
-  for_each      = local.nat_by_index
+  for_each      = toset(local.nat_azs)
   allocation_id = aws_eip.nat[each.key].id
-  subnet_id     = aws_subnet.public[each.value].id
+  subnet_id     = aws_subnet.public[each.key].id
   depends_on    = [aws_internet_gateway.this]
 }
 
 resource "aws_route_table" "private" {
-  for_each = local.nat_by_index
+  for_each = toset(local.nat_azs)
   vpc_id   = aws_vpc.this.id
 
   route {
@@ -83,22 +81,22 @@ resource "aws_route_table" "private" {
 resource "aws_route_table_association" "private" {
   for_each       = aws_subnet.private
   subnet_id      = each.value.id
-  route_table_id = aws_route_table.private[tostring(index(local.azs, each.key))].id
+  route_table_id = aws_route_table.private[var.environment == "prod" ? each.key : local.nat_azs[0]].id
 }
 
 moved {
   from = aws_eip.nat
-  to   = aws_eip.nat["0"]
+  to   = aws_eip.nat["eu-central-1a"]
 }
 
 moved {
   from = aws_nat_gateway.this
-  to   = aws_nat_gateway.this["0"]
+  to   = aws_nat_gateway.this["eu-central-1a"]
 }
 
 moved {
   from = aws_route_table.private
-  to   = aws_route_table.private["0"]
+  to   = aws_route_table.private["eu-central-1a"]
 }
 
 resource "aws_security_group" "alb" {
