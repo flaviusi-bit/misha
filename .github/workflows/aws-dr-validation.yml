@@ -1,0 +1,198 @@
+name: AWS Disaster Recovery Validation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 5 * * 1'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate-dr:
+    runs-on: ubuntu-latest
+    environment: aws-dev
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate deployment role configuration
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          test -n "$AWS_DEPLOY_ROLE_ARN" || {
+            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
+            exit 1
+          }
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubActionsDisasterRecoveryValidation
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Validate backup recovery point freshness
+        env:
+          BACKUP_VAULT_NAME: misha-dev-backup
+        run: |
+          set -euo pipefail
+
+          RECOVERY_POINTS="$(aws backup list-recovery-points-by-backup-vault \
+            --backup-vault-name "$BACKUP_VAULT_NAME" \
+            --query 'RecoveryPoints[?Status==`COMPLETED`] | sort_by(@, &CreationDate)' \
+            --output json)"
+
+          python3 - "$RECOVERY_POINTS" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+
+          points = json.loads(sys.argv[1])
+          if not points:
+              raise SystemExit("DR validation failed: no COMPLETED recovery point exists.")
+
+          latest = points[-1]
+          created = latest.get("CreationDate")
+          if not created:
+              raise SystemExit("DR validation failed: latest recovery point has no CreationDate.")
+
+          created_at = datetime.fromisoformat(created.replace("Z", "+00:00"))
+          age_hours = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600
+
+          print(f"Latest recovery point: {latest.get('RecoveryPointArn')}")
+          print(f"Created: {created_at.isoformat()}")
+          print(f"Age: {age_hours:.2f} hours")
+
+          if age_hours > 26:
+              raise SystemExit("DR validation failed: latest completed recovery point is older than 26 hours.")
+          PY
+
+      - name: Validate restore testing plan
+        env:
+          RESTORE_TESTING_PLAN_NAME: misha_dev_restore_test
+        run: |
+          set -euo pipefail
+
+          PLAN_JSON="$(aws backup get-restore-testing-plan \
+            --restore-testing-plan-name "$RESTORE_TESTING_PLAN_NAME" \
+            --output json)"
+
+          PLAN_ARN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["RestoreTestingPlan"]["RestoreTestingPlanArn"])' <<<"$PLAN_JSON")"
+          echo "Restore testing plan: $PLAN_ARN"
+
+          python3 - "$PLAN_JSON" <<'PY'
+          import json
+          import sys
+
+          plan = json.loads(sys.argv[1])["RestoreTestingPlan"]
+          selection = plan["RecoveryPointSelection"]
+
+          expected = {
+              "algorithm": "LATEST_WITHIN_WINDOW",
+              "recovery_point_types": ["SNAPSHOT"],
+              "selection_window_days": 7,
+          }
+
+          if selection.get("Algorithm") != expected["algorithm"]:
+              raise SystemExit("Unexpected restore testing recovery point algorithm.")
+          if selection.get("RecoveryPointTypes") != expected["recovery_point_types"]:
+              raise SystemExit("Unexpected restore testing recovery point types.")
+          if selection.get("SelectionWindowDays") != expected["selection_window_days"]:
+              raise SystemExit("Unexpected restore testing selection window.")
+
+          print(f"Schedule: {plan['ScheduleExpression']}")
+          print(f"Start window: {plan.get('StartWindowHours')} hours")
+          print("Restore testing plan configuration is valid.")
+          PY
+
+          echo "RESTORE_TESTING_PLAN_ARN=$PLAN_ARN" >> "$GITHUB_ENV"
+
+      - name: Validate restore testing selection
+        env:
+          RESTORE_TESTING_PLAN_NAME: misha_dev_restore_test
+          RESTORE_TESTING_SELECTION_NAME: postgres
+        run: |
+          set -euo pipefail
+
+          SELECTION_JSON="$(aws backup get-restore-testing-selection \
+            --restore-testing-plan-name "$RESTORE_TESTING_PLAN_NAME" \
+            --restore-testing-selection-name "$RESTORE_TESTING_SELECTION_NAME" \
+            --output json)"
+
+          python3 - "$SELECTION_JSON" <<'PY'
+          import json
+          import sys
+
+          selection = json.loads(sys.argv[1])["RestoreTestingSelection"]
+
+          if selection.get("ProtectedResourceType") != "RDS":
+              raise SystemExit("Restore testing selection is not configured for RDS.")
+          if not selection.get("ProtectedResourceArns"):
+              raise SystemExit("Restore testing selection has no protected RDS ARN.")
+          if selection.get("ValidationWindowHours") != 2:
+              raise SystemExit("Unexpected restore testing validation window.")
+
+          print(f"Protected resource type: {selection['ProtectedResourceType']}")
+          print(f"Protected resources: {len(selection['ProtectedResourceArns'])}")
+          print(f"Validation window: {selection['ValidationWindowHours']} hours")
+          PY
+
+      - name: Validate recent successful RDS restore test
+        env:
+          RESTORE_TESTING_PLAN_ARN: ${{ env.RESTORE_TESTING_PLAN_ARN }}
+        run: |
+          set -euo pipefail
+
+          NOW_EPOCH="$(date -u +%s)"
+          CREATED_AFTER_EPOCH="$((NOW_EPOCH - 8 * 24 * 60 * 60))"
+          CREATED_AFTER="$(date -u -d "@${CREATED_AFTER_EPOCH}" '+%Y-%m-%dT%H:%M:%SZ')"
+
+          JOBS="$(aws backup list-restore-jobs \
+            --by-restore-testing-plan-arn "$RESTORE_TESTING_PLAN_ARN" \
+            --by-resource-type RDS \
+            --by-created-after "$CREATED_AFTER" \
+            --output json)"
+
+          python3 - "$JOBS" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+
+          jobs = json.loads(sys.argv[1]).get("RestoreJobs", [])
+          if not jobs:
+              raise SystemExit("DR validation failed: no RDS restore test completed within the last 8 days.")
+
+          jobs.sort(key=lambda job: job.get("CreationDate", 0), reverse=True)
+          latest = jobs[0]
+
+          print(f"Restore job: {latest.get('RestoreJobId')}")
+          print(f"Status: {latest.get('Status')}")
+          print(f"Validation status: {latest.get('ValidationStatus')}")
+          print(f"Deletion status: {latest.get('DeletionStatus')}")
+          print(f"Recovery point: {latest.get('RecoveryPointArn')}")
+          print(f"Created resource: {latest.get('CreatedResourceArn')}")
+
+          if latest.get("Status") != "COMPLETED":
+              raise SystemExit("DR validation failed: latest RDS restore test did not complete successfully.")
+          if latest.get("DeletionStatus") == "FAILED":
+              raise SystemExit("DR validation failed: restore-test resource cleanup failed.")
+
+          created = latest.get("CreationDate")
+          completed = latest.get("CompletionDate")
+          if created and completed:
+              duration_minutes = (completed - created) / 60
+              print(f"Restore duration: {duration_minutes:.2f} minutes")
+
+          print("Recent RDS restore test completed successfully.")
+          PY
+
+      - name: DR validation summary
+        run: |
+          echo "AWS disaster recovery validation passed for aws-dev."
+          echo "RPO evidence: a completed recovery point is no more than 26 hours old."
+          echo "Restore evidence: an RDS restore test completed successfully within the last 8 days."
+          echo "Cleanup evidence: the restore-test resource was not reported as failed to delete."
