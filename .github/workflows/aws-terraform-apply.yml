@@ -113,6 +113,18 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
+      # A previous interrupted deployment left this resource tainted in the
+      # remote Terraform state. Clear only the stale taint before planning;
+      # Terraform will still recreate it if the remote object is actually gone.
+      - name: Clear stale CloudWatch dashboard taint
+        run: |
+          set -euo pipefail
+          if terraform state show -no-color aws_cloudwatch_dashboard.platform >/dev/null 2>&1; then
+            terraform state untaint aws_cloudwatch_dashboard.platform
+          else
+            echo "CloudWatch dashboard is not present in state; nothing to untaint."
+          fi
+
       # The existing deployment policy is managed by Terraform and contains the
       # permissions needed by the first full plan. Update it before planning,
       # wait for propagation, then obtain a fresh OIDC session.
