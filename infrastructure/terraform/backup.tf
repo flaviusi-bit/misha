@@ -22,8 +22,10 @@ resource "aws_iam_role" "backup" {
     Version   = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
-      Principal = { Service = "backup.amazonaws.com" }
-      Action    = "sts:AssumeRole"
+      Principal = {
+        Service = "backup.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
     }]
   })
 
