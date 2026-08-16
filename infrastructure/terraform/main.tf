@@ -57,9 +57,8 @@ locals {
 }
 
 resource "aws_eip" "nat" {
-  for_each   = toset(local.nat_azs)
-  domain     = "vpc"
-  depends_on = [aws_iam_role_policy.github_actions_deploy]
+  for_each = toset(local.nat_azs)
+  domain   = "vpc"
 }
 
 resource "aws_nat_gateway" "this" {
