@@ -19,13 +19,11 @@ resource "aws_iam_role" "backup" {
   name = "${local.name}-backup"
 
   assume_role_policy = jsonencode({
-    Version   = "2012-10-17"
+    Version = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
-      Principal = {
-        Service = "backup.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
+      Principal = { Service = "backup.amazonaws.com" }
+      Action    = "sts:AssumeRole"
     }]
   })
 
@@ -91,7 +89,7 @@ resource "aws_backup_restore_testing_selection" "postgres" {
   name                       = "postgres"
   restore_testing_plan_name = aws_backup_restore_testing_plan.application.name
   protected_resource_type    = "RDS"
-  protected_resource_arns    = [aws_db_instance.postgres.arn]
+  protected_resource_arns   = [aws_db_instance.postgres.arn]
   iam_role_arn               = aws_iam_role.backup.arn
   validation_window_hours    = 2
 
