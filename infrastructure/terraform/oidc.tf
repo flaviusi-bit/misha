@@ -111,13 +111,10 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "ec2:CreateSubnet",
         "ec2:DeleteSubnet",
         "ec2:ModifySubnetAttribute",
-        "ec2:CreateRouteTable",
-        "ec2:DeleteRouteTable",
+        "ec2:*RouteTable*",
         "ec2:CreateRoute",
         "ec2:ReplaceRoute",
         "ec2:DeleteRoute",
-        "ec2:AssociateRouteTable",
-        "ec2:DisassociateRouteTable",
         "ec2:AllocateAddress",
         "ec2:ReleaseAddress",
         "ec2:CreateNatGateway",
@@ -301,7 +298,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "cloudwatch:DeleteAlarms",
         "cloudwatch:TagResource",
         "cloudwatch:UntagResource"
-      ], Resource = "arn:aws:cloudwatch:eu-central-1:576984879588:alarm:${local.name}-*" }
+      ], Resource = "arn:aws:cloudwatch:eu-central-1:576984879588:alarm:${local.name}-*" },
+      { Effect = "Allow", Action = ["cloudwatch:PutDashboard"], Resource = "*" }
     ]
   })
 }
