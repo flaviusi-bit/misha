@@ -11,8 +11,11 @@ public sealed class PolicyService(
     IPassportRepository passports,
     IPassportVerificationProvider passportVerification,
     IWatchlistCheckRepository watchlists,
-    IPolicyEngine engine)
+    IPolicyEngine engine,
+    IRiskAssessmentEngine? riskAssessmentEngine = null)
 {
+    private readonly IRiskAssessmentEngine _riskAssessmentEngine = riskAssessmentEngine ?? new DeterministicRiskAssessmentEngine();
+
     public async Task<PolicyEvaluation> EvaluateAsync(
         Guid applicationId,
         CancellationToken cancellationToken)
@@ -51,5 +54,13 @@ public sealed class PolicyService(
             PassportExpired: passport.IsExpired(DateOnly.FromDateTime(DateTime.UtcNow)),
             verification.Decision,
             watchlist?.Decision ?? WatchlistDecision.NotChecked));
+    }
+
+    public async Task<RiskAssessment> AssessRiskAsync(
+        Guid applicationId,
+        CancellationToken cancellationToken)
+    {
+        var policyEvaluation = await EvaluateAsync(applicationId, cancellationToken);
+        return _riskAssessmentEngine.Assess(policyEvaluation);
     }
 }
