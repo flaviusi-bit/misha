@@ -35,6 +35,11 @@ resource "aws_iam_role_policy_attachment" "backup" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
 }
 
+resource "aws_iam_role_policy_attachment" "restore" {
+  role       = aws_iam_role.backup.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+}
+
 resource "aws_backup_plan" "application" {
   name = "${local.name}-backup-plan"
 
@@ -62,4 +67,31 @@ resource "aws_backup_selection" "postgres" {
   name         = "${local.name}-postgres"
   plan_id      = aws_backup_plan.application.id
   resources    = [aws_db_instance.postgres.arn]
+}
+
+resource "aws_backup_restore_testing_plan" "application" {
+  name = "${replace(local.name, "-", "_")}_restore_test"
+
+  recovery_point_selection {
+    algorithm             = "LATEST_WITHIN_WINDOW"
+    include_vaults        = [aws_backup_vault.application.arn]
+    recovery_point_types  = ["SNAPSHOT"]
+    selection_window_days = 7
+  }
+
+  schedule_expression = "cron(0 4 ? * SUN *)"
+  start_window_hours  = 4
+
+  depends_on = [aws_backup_selection.postgres]
+}
+
+resource "aws_backup_restore_testing_selection" "postgres" {
+  name                      = "postgres"
+  restore_testing_plan_name = aws_backup_restore_testing_plan.application.name
+  protected_resource_type   = "RDS"
+  protected_resource_arns   = [aws_db_instance.postgres.arn]
+  iam_role_arn              = aws_iam_role.backup.arn
+  validation_window_hours   = 2
+
+  depends_on = [aws_iam_role_policy_attachment.restore]
 }
