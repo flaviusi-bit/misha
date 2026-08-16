@@ -15,8 +15,8 @@ resource "aws_iam_role_policy" "github_actions_observability_network" {
         Resource = "*"
       },
       {
-        Effect = "Allow"
-        Action = ["ec2:ReplaceRouteTableAssociation"]
+        Effect   = "Allow"
+        Action   = ["ec2:ReplaceRouteTableAssociation"]
         Resource = "*"
       }
     ]
