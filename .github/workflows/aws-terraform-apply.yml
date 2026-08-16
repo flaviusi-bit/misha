@@ -93,7 +93,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: eu-central-1
-          role-session-name: GitHubActionsTerraformApplyBootstrap
+          role-session-name: GitHubActionsTerraformApply
 
       - name: Verify AWS identity
         working-directory: .
@@ -128,54 +128,7 @@ jobs:
             echo "CloudWatch dashboard is not tainted; no state mutation required."
           fi
 
-      # Do not use Terraform -target here. Terraform 1.10 rejects the targeted
-      # IAM bootstrap because moved networking instances must also be selected.
-      # The previous attempt proved that selecting those networking resources
-      # can execute real destroy operations before the full plan is reviewed.
-      # Bootstrap only the narrowly required EIP permission through IAM, then
-      # re-assume the role so the full Terraform plan runs without targeting.
-      - name: Bootstrap EIP cleanup IAM permission
-        working-directory: .
-        env:
-          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
-          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-        run: |
-          set -euo pipefail
-          ROLE_NAME="${AWS_DEPLOY_ROLE_ARN##*/}"
-          POLICY_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-eip-cleanup"
-          cat > /tmp/eip-cleanup-policy.json <<'EOF'
-          {
-            "Version": "2012-10-17",
-            "Statement": [
-              {
-                "Effect": "Allow",
-                "Action": ["ec2:DisassociateAddress"],
-                "Resource": "*"
-              }
-            ]
-          }
-          EOF
-          aws iam put-role-policy \
-            --role-name "$ROLE_NAME" \
-            --policy-name "$POLICY_NAME" \
-            --policy-document file:///tmp/eip-cleanup-policy.json
-
-      - name: Wait for IAM policy propagation
-        working-directory: .
-        run: sleep 20
-
-      - name: Re-assume AWS role with fresh credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: eu-central-1
-          role-session-name: GitHubActionsTerraformApplyFresh
-
-      - name: Verify fresh AWS identity
-        working-directory: .
-        run: aws sts get-caller-identity
-
-      - name: Terraform plan with fresh credentials
+      - name: Terraform plan
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
           DOMAIN_NAME: ${{ inputs.domain_name || '' }}
