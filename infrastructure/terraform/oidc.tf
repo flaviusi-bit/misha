@@ -172,10 +172,15 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "logs:PutRetentionPolicy",
         "logs:DeleteRetentionPolicy",
         "logs:TagResource",
-        "logs:UntagResource"
+        "logs:UntagResource",
+        "logs:DescribeLogStreams",
+        "logs:FilterLogEvents",
+        "logs:GetLogEvents"
         ], Resource = [
         "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/api",
-        "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/worker"
+        "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/worker",
+        "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/api:*",
+        "arn:aws:logs:eu-central-1:576984879588:log-group:/ecs/misha-dev/worker:*"
       ] },
       { Effect = "Allow", Action = [
         "rds:Describe*",
