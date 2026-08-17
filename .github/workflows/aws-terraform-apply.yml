@@ -128,28 +128,27 @@ jobs:
             echo "CloudWatch dashboard is not tainted; no state mutation required."
           fi
 
-      # Bootstrap only the existing deployment policy. Do NOT target the EIP,
-      # NAT gateway, or route table: doing so previously caused real destroys
-      # before the full plan was reviewed. The policy already contains the
-      # Terraform IAM-management permission, so this targeted update is limited
-      # to granting ec2:DisassociateAddress before the full apply.
-      - name: Bootstrap deployment IAM policy
-        run: terraform apply -input=false -auto-approve -target=aws_iam_role_policy.github_actions_deploy
+      # The deployment role's inline policy is already at IAM's 10,240-character
+      # aggregate limit. Terraform therefore ignores policy drift for this
+      # resource during the recovery apply. Grant the missing VPC permission
+      # through the AWS-managed AmazonVPCFullAccess policy only for this run.
+      # The policy is detached unconditionally at the end of the job.
+      - name: Attach temporary VPC bootstrap policy
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          POLICY_ARN="arn:aws:iam::aws:policy/AmazonVPCFullAccess"
+          aws iam attach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN"
+          aws iam list-attached-role-policies \
+            --role-name "$ROLE_NAME" \
+            --query "AttachedPolicies[?PolicyArn=='$POLICY_ARN']" \
+            --output table
 
-      - name: Wait for IAM policy propagation
+      - name: Wait for temporary IAM policy propagation
         working-directory: .
-        run: sleep 20
-
-      - name: Re-assume AWS role with fresh credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: eu-central-1
-          role-session-name: GitHubActionsTerraformApplyFresh
-
-      - name: Verify fresh AWS identity
-        working-directory: .
-        run: aws sts get-caller-identity
+        run: sleep 10
 
       - name: Terraform plan
         env:
@@ -203,3 +202,21 @@ jobs:
             -var="route53_zone_id=${ROUTE53_ZONE_ID}" \
             -var="final_snapshot_identifier=${FINAL_SNAPSHOT_IDENTIFIER}" \
             -detailed-exitcode
+
+      - name: Detach temporary VPC bootstrap policy
+        if: always()
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          POLICY_ARN="arn:aws:iam::aws:policy/AmazonVPCFullAccess"
+          aws iam detach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN" || true
+          REMAINING=$(aws iam list-attached-role-policies \
+            --role-name "$ROLE_NAME" \
+            --query "length(AttachedPolicies[?PolicyArn=='$POLICY_ARN'])" \
+            --output text)
+          test "$REMAINING" = "0" || {
+            echo "ERROR: temporary AmazonVPCFullAccess policy is still attached."
+            exit 1
+          }
