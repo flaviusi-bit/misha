@@ -1,14 +1,5 @@
-# Production-only resilience overrides.
-# Development retains the existing single-task / single-AZ-cost profile.
-
-resource "aws_ecs_service" "api" {
-  desired_count = var.environment == "prod" ? max(var.ecs_desired_count, 2) : var.ecs_desired_count
-}
-
-resource "aws_ecs_service" "worker" {
-  desired_count = var.environment == "prod" ? max(var.ecs_worker_desired_count, 2) : var.ecs_worker_desired_count
-}
-
-resource "aws_db_instance" "postgres" {
-  multi_az = var.environment == "prod"
-}
+# Production hardening is implemented on the actual Terraform resources.
+# This file intentionally contains no override blocks.
+# The previous override referenced aws_ecs_service.api and aws_db_instance.postgres
+# under addresses that do not exist in this configuration, which made Terraform
+# fail during terraform init with "Missing resource to override".
