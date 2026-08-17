@@ -75,15 +75,15 @@ jobs:
             --query 'services[0].status' --output text | grep -qx 'ACTIVE'
 
       - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Resolve ECR registry
-        id: registry
-        run: echo "registry=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+          echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
 
       - name: Build and push worker image
         env:
-          REGISTRY: ${{ steps.registry.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -93,7 +93,11 @@ jobs:
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
       - name: Fetch current worker task definition
-        run: aws ecs describe-task-definition --task-definition "$ECS_TASK_DEFINITION" --query taskDefinition > worker-task-definition.json
+        run: |
+          set -euo pipefail
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition > worker-task-definition.json
 
       - name: Verify worker queue configuration
         run: |
@@ -101,22 +105,41 @@ jobs:
           jq -e '.containerDefinitions[] | select(.name == "worker") | any(.environment[]?; .name == "Outbox__QueueUrl" and (.value | startswith("https://sqs.")))' worker-task-definition.json >/dev/null
           echo "Worker SQS queue configuration is present."
 
-      - name: Render worker ECS task definition
-        id: render
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: worker-task-definition.json
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ env.IMAGE }}
+      - name: Render task definition with AWS CLI
+        run: |
+          set -euo pipefail
+          jq --arg IMAGE "$IMAGE" --arg CONTAINER "$CONTAINER_NAME" '
+            del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)
+            | .containerDefinitions = (.containerDefinitions | map(if .name == $CONTAINER then .image = $IMAGE else . end))
+          ' worker-task-definition.json > rendered-task-definition.json
+          jq -e --arg IMAGE "$IMAGE" --arg CONTAINER "$CONTAINER_NAME" '
+            any(.containerDefinitions[]; .name == $CONTAINER and .image == $IMAGE)
+          ' rendered-task-definition.json >/dev/null
+
+      - name: Register worker task definition
+        id: register
+        run: |
+          set -euo pipefail
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://rendered-task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          test -n "$TASK_DEF_ARN"
+          echo "task_definition=$TASK_DEF_ARN" >> "$GITHUB_OUTPUT"
+          echo "Registered $TASK_DEF_ARN"
 
       - name: Deploy worker ECS service
         id: deploy_worker
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.render.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "${{ steps.register.outputs.task_definition }}" \
+            --force-new-deployment >/dev/null
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"
 
       - name: Diagnose failed worker deployment immediately
         if: failure() && steps.deploy_worker.outcome == 'failure'
@@ -135,7 +158,6 @@ jobs:
             --services "$ECS_SERVICE" \
             --query 'services[0].events[0:20].message' \
             --output text)
-
           TASK_IDS=$(printf '%s\n' "$EVENTS" | grep -oE '\(task [0-9a-f]{32}\)' | sed -E 's/.*task ([0-9a-f]{32}).*/\1/' | sort -u)
           if [ -z "$TASK_IDS" ]; then
             echo 'No task IDs could be extracted from ECS events.'
@@ -150,6 +172,9 @@ jobs:
             done
           fi
 
+          echo '=== WORKER LOGS ==='
+          aws logs tail "/ecs/misha-dev/worker" --since 30m --format short || true
+
       - name: Verify worker service and queue configuration
         run: |
           set -euo pipefail
@@ -158,16 +183,10 @@ jobs:
             --services "$ECS_SERVICE" \
             --query 'services[0].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition}' \
             --output table
-
           RUNNING=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].runningCount' --output text)
           DESIRED=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].desiredCount' --output text)
           test "$RUNNING" -ge 1
           test "$DESIRED" -ge 1
-
-          TASK_DEF=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].taskDefinition' --output text)
-          aws ecs describe-task-definition --task-definition "$TASK_DEF" \
-            --query 'taskDefinition.containerDefinitions[?name==`worker`].{Image:image,Queue:environment[?name==`Outbox__QueueUrl`].value|[0]}' \
-            --output table
 
       - name: Verify worker IAM policy
         run: |
