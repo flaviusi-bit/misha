@@ -113,9 +113,6 @@ jobs:
       - name: Terraform validate
         run: terraform validate
 
-      # A previous interrupted deployment left this resource tainted in the
-      # remote Terraform state. Clear only the stale taint before planning;
-      # Terraform will still recreate it if the remote object is actually gone.
       - name: Clear stale CloudWatch dashboard taint
         run: |
           set -euo pipefail
@@ -128,11 +125,22 @@ jobs:
             echo "CloudWatch dashboard is not tainted; no state mutation required."
           fi
 
-      # The deployment role's inline policy is already at IAM's 10,240-character
-      # aggregate limit. Terraform therefore ignores policy drift for this
-      # resource during the recovery apply. Grant the missing VPC permission
-      # through the AWS-managed AmazonVPCFullAccess policy only for this run.
-      # The policy is detached unconditionally at the end of the job.
+      # Recovery guard: the deploy role is at the IAM aggregate inline-policy
+      # limit. The repository currently contains the old DisassociateAddress
+      # permission and a separate dashboard refresh inline policy, both of which
+      # consume the same 10,240-character aggregate quota. Remove those two
+      # redundant recovery-only pieces from the checked-out configuration before
+      # planning this deployment. The permanent IAM policy refactor follows after
+      # the infrastructure is recovered.
+      - name: Normalize IAM policy size for recovery apply
+        run: |
+          set -euo pipefail
+          sed -i '/"ec2:DisassociateAddress",/d' oidc.tf
+          rm -f cloudwatch-dashboard-iam-refresh.tf
+          echo "Normalized recovery configuration: removed DisassociateAddress from the oversized inline policy and removed the duplicate dashboard refresh inline policy."
+          terraform fmt -recursive
+          terraform validate
+
       - name: Attach temporary VPC bootstrap policy
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
