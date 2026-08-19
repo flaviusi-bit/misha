@@ -86,6 +86,29 @@ public sealed class SqsMessageConsumerTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task ConsumeOnceAsync_WhenSqsOmitsMessages_ReturnsFalseWithoutDelete()
+    {
+        var sqs = new Mock<IAmazonSQS>();
+        sqs.Setup(x => x.ReceiveMessageAsync(It.IsAny<ReceiveMessageRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReceiveMessageResponse { Messages = null });
+
+        var consumer = CreateConsumer(sqs);
+        var handled = false;
+
+        var consumed = await consumer.ConsumeOnceAsync((_, _) =>
+        {
+            handled = true;
+            return Task.CompletedTask;
+        }, CancellationToken.None);
+
+        Assert.False(consumed);
+        Assert.False(handled);
+        sqs.Verify(x => x.DeleteMessageAsync(
+            It.IsAny<DeleteMessageRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private static SqsMessageConsumer CreateConsumer(Mock<IAmazonSQS> sqs) =>
         new(sqs.Object, QueueUrl, NullLogger<SqsMessageConsumer>.Instance);
 
