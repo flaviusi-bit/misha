@@ -40,40 +40,29 @@ jobs:
        github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     environment: aws-dev
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-
       - name: Validate deployment role configuration
         env:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-        run: |
-          test -n "$AWS_DEPLOY_ROLE_ARN" || {
-            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
-            exit 1
-          }
-
+        run: test -n "$AWS_DEPLOY_ROLE_ARN"
       - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActionsECSWorkerDeploy
-
       - name: Verify AWS identity
         run: aws sts get-caller-identity
-
       - name: Verify worker infrastructure exists
         run: |
           set -euo pipefail
           aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" >/dev/null
           aws ecs describe-task-definition --task-definition "$ECS_TASK_DEFINITION" >/dev/null
-          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
-            --query 'services[0].status' --output text | grep -qx 'ACTIVE'
-
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].status' --output text | grep -qx 'ACTIVE'
       - name: Login to Amazon ECR
         run: |
           set -euo pipefail
@@ -81,7 +70,6 @@ jobs:
           REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
           echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
-
       - name: Build and push worker image
         env:
           IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
@@ -91,203 +79,94 @@ jobs:
           docker build -f src/Misha.Worker/Dockerfile -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-
       - name: Fetch current worker task definition
         run: |
           set -euo pipefail
-          aws ecs describe-task-definition \
-            --task-definition "$ECS_TASK_DEFINITION" \
-            --query taskDefinition > worker-task-definition.json
-
+          aws ecs describe-task-definition --task-definition "$ECS_TASK_DEFINITION" --query taskDefinition > worker-task-definition.json
       - name: Verify worker queue configuration
         run: |
           set -euo pipefail
           jq -e '.containerDefinitions[] | select(.name == "worker") | any(.environment[]?; .name == "Outbox__QueueUrl" and (.value | startswith("https://sqs.")))' worker-task-definition.json >/dev/null
-          echo "Worker SQS queue configuration is present."
-
       - name: Render task definition with AWS CLI
         run: |
           set -euo pipefail
-          jq --arg IMAGE "$IMAGE" --arg CONTAINER "$CONTAINER_NAME" '
-            del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)
-            | .containerDefinitions = (.containerDefinitions | map(if .name == $CONTAINER then .image = $IMAGE else . end))
-          ' worker-task-definition.json > rendered-task-definition.json
-          jq -e --arg IMAGE "$IMAGE" --arg CONTAINER "$CONTAINER_NAME" '
-            any(.containerDefinitions[]; .name == $CONTAINER and .image == $IMAGE)
-          ' rendered-task-definition.json >/dev/null
-
+          jq --arg IMAGE "$IMAGE" --arg CONTAINER "$CONTAINER_NAME" 'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy) | .containerDefinitions = (.containerDefinitions | map(if .name == $CONTAINER then .image = $IMAGE else . end))' worker-task-definition.json > rendered-task-definition.json
+          jq -e --arg IMAGE "$IMAGE" --arg CONTAINER "$CONTAINER_NAME" 'any(.containerDefinitions[]; .name == $CONTAINER and .image == $IMAGE)' rendered-task-definition.json >/dev/null
       - name: Register worker task definition
         id: register
         run: |
           set -euo pipefail
-          TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://rendered-task-definition.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
+          TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://rendered-task-definition.json --query 'taskDefinition.taskDefinitionArn' --output text)
           test -n "$TASK_DEF_ARN"
           echo "task_definition=$TASK_DEF_ARN" >> "$GITHUB_OUTPUT"
-          echo "Registered $TASK_DEF_ARN"
-
       - name: Deploy worker ECS service
-        id: deploy_worker
         run: |
           set -euo pipefail
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --task-definition "${{ steps.register.outputs.task_definition }}" \
-            --force-new-deployment >/dev/null
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE"
-
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --task-definition "${{ steps.register.outputs.task_definition }}" --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
       - name: Verify requested worker deployment actually completed
-        id: verify_deployment
         run: |
           set -euo pipefail
           EXPECTED_TASK_DEF="${{ steps.register.outputs.task_definition }}"
-          SERVICE_JSON=$(aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --output json)
-
-          echo '=== FINAL WORKER DEPLOYMENT STATE ==='
-          echo "$SERVICE_JSON" | jq '.services[0] | {taskDefinition, desiredCount, runningCount, pendingCount, deployments: [.deployments[] | {status, taskDefinition, desiredCount, runningCount, pendingCount, rolloutState, rolloutStateReason}]}'
-
+          SERVICE_JSON=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --output json)
+          echo "$SERVICE_JSON" | jq '.services[0] | {taskDefinition,desiredCount,runningCount,pendingCount,deployments:[.deployments[]|{status,taskDefinition,desiredCount,runningCount,pendingCount,rolloutState,rolloutStateReason}]}'
           CURRENT_TASK_DEF=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
-          EXPECTED_DEPLOYMENT_COMPLETED=$(echo "$SERVICE_JSON" | jq -r --arg expected "$EXPECTED_TASK_DEF" '
-            any(.services[0].deployments[]?; .taskDefinition == $expected and .rolloutState == "COMPLETED")
-          ')
-
-          if [ "$CURRENT_TASK_DEF" != "$EXPECTED_TASK_DEF" ]; then
-            echo "ERROR: ECS service rolled back or otherwise did not retain the requested task definition."
-            echo "Expected: $EXPECTED_TASK_DEF"
-            echo "Actual:   $CURRENT_TASK_DEF"
-            exit 1
-          fi
-
-          if [ "$EXPECTED_DEPLOYMENT_COMPLETED" != "true" ]; then
-            echo "ERROR: Requested ECS deployment is not COMPLETED."
-            echo "Expected task definition: $EXPECTED_TASK_DEF"
-            exit 1
-          fi
-
-          echo "SUCCESS: requested worker deployment is active and COMPLETED."
-
+          COMPLETED=$(echo "$SERVICE_JSON" | jq -r --arg expected "$EXPECTED_TASK_DEF" 'any(.services[0].deployments[]?; .taskDefinition == $expected and .rolloutState == "COMPLETED")')
+          test "$CURRENT_TASK_DEF" = "$EXPECTED_TASK_DEF"
+          test "$COMPLETED" = "true"
       - name: Diagnose failed worker deployment immediately
         if: failure()
         run: |
           set +e
           echo '=== ECS SERVICE ==='
-          aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --query 'services[0].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition}' \
-            --output table
-
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --output json
           echo '=== ECS SERVICE EVENTS ==='
-          aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --query 'services[0].events[0:30].[createdAt,message]' \
-            --output table
-
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].events[0:30].[createdAt,message]' --output table
           echo '=== ECS DEPLOYMENTS ==='
-          aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --query 'services[0].deployments[].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition,rolloutState:rolloutState,reason:rolloutStateReason}' \
-            --output table
-
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].deployments[].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition,rolloutState:rolloutState,reason:rolloutStateReason}' --output table
           echo '=== STOPPED WORKER TASKS ==='
-          TASKS=$(aws ecs list-tasks \
-            --cluster "$ECS_CLUSTER" \
-            --service-name "$ECS_SERVICE" \
-            --desired-status STOPPED \
-            --max-items 20 \
-            --query 'taskArns[]' \
-            --output text)
-          if [ -z "$TASKS" ]; then
-            echo 'No stopped tasks returned.'
-          else
-            aws ecs describe-tasks \
-              --cluster "$ECS_CLUSTER" \
-              --tasks $TASKS \
-              --query 'tasks[].{taskArn:taskArn,lastStatus:lastStatus,desiredStatus:desiredStatus,stopCode:stopCode,stoppedReason:stoppedReason,taskDefinition:taskDefinition,containers:containers[].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason}}' \
-              --output json
+          TASKS=$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_SERVICE" --desired-status STOPPED --max-items 20 --query 'taskArns[]' --output text)
+          if [ -n "$TASKS" ]; then
+            aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks $TASKS --query 'tasks[].{taskArn:taskArn,lastStatus:lastStatus,stopCode:stopCode,stoppedReason:stoppedReason,taskDefinition:taskDefinition,containers:containers[].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason}}' --output json
           fi
-
           echo '=== WORKER LOGS ==='
           aws logs tail "/ecs/misha-dev/worker" --since 30m --format short || true
 
-      - name: Verify worker service and queue configuration
-        run: |
-          set -euo pipefail
-          aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --query 'services[0].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition}' \
-            --output table
-          RUNNING=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].runningCount' --output text)
-          DESIRED=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].desiredCount' --output text)
-          test "$RUNNING" -ge 1
-          test "$DESIRED" -ge 1
-
-      - name: Verify worker IAM policy
-        run: |
-          aws iam get-role-policy \
-            --role-name misha-dev-ecs-worker-task \
-            --policy-name misha-dev-ecs-worker-task-policy \
-            --query 'PolicyDocument.Statement[0].Action' \
-            --output json
-
   diagnose:
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'diagnose'
+    needs: deploy
+    if: >-
+      always() &&
+      ((github.event_name == 'workflow_dispatch' && inputs.mode == 'diagnose') ||
+       needs.deploy.result == 'failure')
     runs-on: ubuntu-latest
     environment: aws-dev
-
     steps:
       - name: Validate deployment role configuration
         env:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: test -n "$AWS_DEPLOY_ROLE_ARN"
-
       - name: Configure AWS credentials with GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActionsECSWorkerDiagnostics
-
       - name: Capture ECS service state and deployment events
         run: |
           set -euo pipefail
           echo '=== SERVICE ==='
-          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
-            --query 'services[0].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition,rolloutState:deployments[0].rolloutState,rolloutReason:deployments[0].rolloutStateReason}' \
-            --output table
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --output json
           echo '=== EVENTS ==='
-          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
-            --query 'services[0].events[0:20].[createdAt,message]' --output table
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].events[0:30].[createdAt,message]' --output table
           echo '=== DEPLOYMENTS ==='
-          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
-            --query 'services[0].deployments[].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition,rolloutState:rolloutState,reason:rolloutStateReason}' \
-            --output table
-
+          aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --query 'services[0].deployments[].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition,rolloutState:rolloutState,reason:rolloutStateReason}' --output table
       - name: Capture stopped worker task reasons
         run: |
           set -euo pipefail
           TASKS=$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_SERVICE" --desired-status STOPPED --max-items 20 --query 'taskArns[]' --output text)
-          if [ -z "$TASKS" ]; then
-            echo 'No stopped tasks returned.'
-            exit 0
-          fi
-          aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks $TASKS \
-            --query 'tasks[].{taskArn:taskArn,lastStatus:lastStatus,stopCode:stopCode,stoppedReason:stoppedReason,containers:containers[].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason}}' \
-            --output json
-
+          if [ -z "$TASKS" ]; then echo 'No stopped tasks returned.'; exit 0; fi
+          aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks $TASKS --query 'tasks[].{taskArn:taskArn,lastStatus:lastStatus,stopCode:stopCode,stoppedReason:stoppedReason,taskDefinition:taskDefinition,containers:containers[].{name:name,lastStatus:lastStatus,exitCode:exitCode,reason:reason}}' --output json
       - name: Capture recent worker logs
         run: |
           set -euo pipefail
-          echo '=== WORKER LOGS (LAST 30 MINUTES) ==='
           aws logs tail "/ecs/misha-dev/worker" --since 30m --format short || true
