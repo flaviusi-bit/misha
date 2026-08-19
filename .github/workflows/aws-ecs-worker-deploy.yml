@@ -108,8 +108,26 @@ jobs:
       - name: Deploy worker ECS service
         run: |
           set -euo pipefail
-          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --task-definition "${{ steps.register.outputs.task_definition }}" --force-new-deployment >/dev/null
-          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
+          EXPECTED_TASK_DEF="${{ steps.register.outputs.task_definition }}"
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --task-definition "$EXPECTED_TASK_DEF" --force-new-deployment >/dev/null
+          for attempt in $(seq 1 40); do
+            SERVICE_JSON=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" --output json)
+            STATE=$(echo "$SERVICE_JSON" | jq -r --arg expected "$EXPECTED_TASK_DEF" 'first(.services[0].deployments[]? | select(.taskDefinition == $expected) | .rolloutState) // "MISSING"')
+            CURRENT=$(echo "$SERVICE_JSON" | jq -r '.services[0].taskDefinition')
+            RUNNING=$(echo "$SERVICE_JSON" | jq -r '.services[0].runningCount')
+            PENDING=$(echo "$SERVICE_JSON" | jq -r '.services[0].pendingCount')
+            echo "attempt=$attempt state=$STATE current=$CURRENT running=$RUNNING pending=$PENDING"
+            if [ "$STATE" = "FAILED" ]; then
+              echo "$SERVICE_JSON" | jq '.services[0].deployments'
+              exit 1
+            fi
+            if [ "$STATE" = "COMPLETED" ] && [ "$CURRENT" = "$EXPECTED_TASK_DEF" ] && [ "$PENDING" = "0" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'ECS deployment did not reach COMPLETED within 10 minutes.'
+          exit 1
       - name: Verify requested worker deployment actually completed
         run: |
           set -euo pipefail
