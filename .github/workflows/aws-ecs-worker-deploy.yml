@@ -70,15 +70,21 @@ jobs:
           REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
           echo "REGISTRY=$REGISTRY" >> "$GITHUB_ENV"
-      - name: Build and push worker image
+      - name: Build and validate worker image
         env:
           IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
         run: |
           set -euo pipefail
           IMAGE="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
           docker build -f src/Misha.Worker/Dockerfile -t "$IMAGE" .
-          docker push "$IMAGE"
+          echo '=== VERIFY .NET RUNTIME IN FINAL IMAGE ==='
+          docker run --rm --entrypoint dotnet "$IMAGE" --list-runtimes
+          docker run --rm --entrypoint sh "$IMAGE" -c 'test -f /app/Misha.Worker.dll && dotnet --list-runtimes | grep -E "Microsoft\.NETCore\.App 10\.|Microsoft\.AspNetCore\.App 10\."'
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+      - name: Push worker image
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE"
       - name: Fetch current worker task definition
         run: |
           set -euo pipefail
