@@ -23,7 +23,7 @@ public sealed class SqsMessageConsumer(
             MessageAttributeNames = ["All"]
         }, cancellationToken);
 
-        var message = response.Messages.FirstOrDefault();
+        var message = response.Messages?.FirstOrDefault();
         if (message is null)
         {
             return false;
@@ -33,10 +33,11 @@ public sealed class SqsMessageConsumer(
             message.MessageId,
             message.ReceiptHandle,
             message.Body,
-            message.MessageAttributes.ToDictionary(
-                pair => pair.Key,
-                pair => pair.Value.StringValue ?? string.Empty,
-                StringComparer.Ordinal));
+            (message.MessageAttributes ?? new Dictionary<string, MessageAttributeValue>())
+                .ToDictionary(
+                    pair => pair.Key,
+                    pair => pair.Value.StringValue ?? string.Empty,
+                    StringComparer.Ordinal));
 
         await handler(applicationMessage, cancellationToken);
 
