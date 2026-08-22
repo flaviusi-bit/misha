@@ -39,15 +39,30 @@ public sealed class SqsMessageConsumer(
                     pair => pair.Value.StringValue ?? string.Empty,
                     StringComparer.Ordinal));
 
-        await handler(applicationMessage, cancellationToken);
-
-        await sqs.DeleteMessageAsync(new DeleteMessageRequest
+        try
         {
-            QueueUrl = queueUrl,
-            ReceiptHandle = message.ReceiptHandle
-        }, cancellationToken);
+            await handler(applicationMessage, cancellationToken);
 
-        logger.LogInformation("Processed and deleted SQS message {MessageId}.", message.MessageId);
-        return true;
+            await sqs.DeleteMessageAsync(new DeleteMessageRequest
+            {
+                QueueUrl = queueUrl,
+                ReceiptHandle = message.ReceiptHandle
+            }, cancellationToken);
+
+            logger.LogInformation("Processed and deleted SQS message {MessageId}.", message.MessageId);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Failed to process SQS message {MessageId}; message will remain available for retry.",
+                message.MessageId);
+            return false;
+        }
     }
 }
