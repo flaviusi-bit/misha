@@ -17,7 +17,8 @@ resource "aws_iam_role_policy" "github_actions_backup_restore_testing" {
           "backup:DeleteRestoreTestingSelection",
           "backup:GetRestoreTestingSelection",
           "backup:ListRestoreTestingSelections",
-          "backup:UpdateRestoreTestingSelection"
+          "backup:UpdateRestoreTestingSelection",
+          "backup:ListRestoreJobs"
         ]
         Resource = "*"
       },
