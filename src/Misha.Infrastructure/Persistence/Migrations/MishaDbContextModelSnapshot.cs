@@ -22,7 +22,17 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
         {
             b.Property<Guid>("Id").HasColumnType("uuid");
             b.Property<string>("ExternalReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<string>("FirstName").HasMaxLength(100).HasColumnType("character varying(100)");
+            b.Property<string>("LastName").HasMaxLength(100).HasColumnType("character varying(100)");
+            b.Property<DateOnly?>("DateOfBirth").HasColumnType("date");
+            b.Property<string>("Nationality").HasMaxLength(3).HasColumnType("character varying(3)");
+            b.Property<string>("CountryOfBirth").HasMaxLength(3).HasColumnType("character varying(3)");
+            b.Property<string>("PlaceOfBirth").HasMaxLength(200).HasColumnType("character varying(200)");
+            b.Property<string>("Gender").HasMaxLength(32).HasColumnType("character varying(32)");
+            b.Property<string>("Email").HasMaxLength(320).HasColumnType("character varying(320)");
+            b.Property<string>("PhoneNumber").HasMaxLength(50).HasColumnType("character varying(50)");
             b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
+            b.Property<DateTimeOffset?>("UpdatedAtUtc").HasColumnType("timestamp with time zone");
             b.HasKey("Id");
             b.HasIndex("ExternalReference").IsUnique();
             b.ToTable("applicants");
