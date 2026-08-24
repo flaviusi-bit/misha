@@ -34,7 +34,18 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         applicant.ToTable("applicants");
         applicant.HasKey(x => x.Id);
         applicant.Property(x => x.ExternalReference).HasMaxLength(200).IsRequired();
+        applicant.Property(x => x.FirstName).HasMaxLength(100);
+        applicant.Property(x => x.LastName).HasMaxLength(100);
+        applicant.Property(x => x.DateOfBirth);
+        applicant.Property(x => x.Nationality).HasMaxLength(3);
+        applicant.Property(x => x.CountryOfBirth).HasMaxLength(3);
+        applicant.Property(x => x.PlaceOfBirth).HasMaxLength(200);
+        applicant.Property(x => x.Gender).HasMaxLength(32);
+        applicant.Property(x => x.Email).HasMaxLength(320);
+        applicant.Property(x => x.PhoneNumber).HasMaxLength(50);
         applicant.Property(x => x.CreatedAtUtc).IsRequired();
+        applicant.Property(x => x.UpdatedAtUtc);
+        applicant.Ignore(x => x.ProfileCompleted);
         applicant.HasIndex(x => x.ExternalReference).IsUnique();
 
         var application = modelBuilder.Entity<MishaApplication>();
