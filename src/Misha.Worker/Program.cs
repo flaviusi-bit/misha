@@ -27,7 +27,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
         throw new InvalidOperationException("Database configuration is missing. Expected ConnectionStrings:Misha or DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD settings.");
     }
 
-    connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword}";
+    connectionString = $"Host={dbHost};Port={dbPort};Database={dbName};Username={dbUser};Password={dbPassword};SSL Mode=Require";
 }
 
 var queueUrl = builder.Configuration["Outbox:QueueUrl"];
