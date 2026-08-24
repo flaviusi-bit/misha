@@ -24,7 +24,7 @@ resource "aws_backup_vault" "application" {
 resource "aws_iam_role" "backup" {
   name = "${local.name}-backup"
 
-  assume_role_policy_policy = jsonencode({
+  assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
