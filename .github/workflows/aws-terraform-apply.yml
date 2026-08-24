@@ -125,13 +125,6 @@ jobs:
             echo "CloudWatch dashboard is not tainted; no state mutation required."
           fi
 
-      # Recovery guard: the deploy role is at the IAM aggregate inline-policy
-      # limit. The repository currently contains the old DisassociateAddress
-      # permission and a separate dashboard refresh inline policy, both of which
-      # consume the same 10,240-character aggregate quota. Remove those two
-      # redundant recovery-only pieces from the checked-out configuration before
-      # planning this deployment. The permanent IAM policy refactor follows after
-      # the infrastructure is recovered.
       - name: Normalize IAM policy size for recovery apply
         run: |
           set -euo pipefail
@@ -165,7 +158,11 @@ jobs:
           ROUTE53_ZONE_ID: ${{ inputs.route53_zone_id || '' }}
           FINAL_SNAPSHOT_IDENTIFIER: ${{ inputs.final_snapshot_identifier || '' }}
         run: |
-          terraform plan -input=false \
+          # The first plan is the bootstrap plan. It must not refresh the
+          # existing restore-testing resources because their read permissions
+          # are being added by this very plan. The post-apply verification plan
+          # below runs with the normal refresh behavior once the permissions exist.
+          terraform plan -refresh=false -input=false \
             -var="environment=${TARGET_ENVIRONMENT}" \
             -var="domain_name=${DOMAIN_NAME}" \
             -var="route53_zone_id=${ROUTE53_ZONE_ID}" \
