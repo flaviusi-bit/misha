@@ -45,7 +45,7 @@ public sealed class SqsMessageConsumerTests
     }
 
     [Fact]
-    public async Task ConsumeOnceAsync_WhenHandlerFails_DoesNotDeleteMessage()
+    public async Task ConsumeOnceAsync_WhenHandlerFails_DoesNotDeleteMessageAndReturnsFalse()
     {
         var sqs = new Mock<IAmazonSQS>();
         var message = CreateMessage();
@@ -54,10 +54,10 @@ public sealed class SqsMessageConsumerTests
 
         var consumer = CreateConsumer(sqs);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            consumer.ConsumeOnceAsync((_, _) =>
-                Task.FromException(new InvalidOperationException("processing failed")), CancellationToken.None));
+        var consumed = await consumer.ConsumeOnceAsync((_, _) =>
+            Task.FromException(new InvalidOperationException("processing failed")), CancellationToken.None);
 
+        Assert.False(consumed);
         sqs.Verify(x => x.DeleteMessageAsync(
             It.IsAny<DeleteMessageRequest>(),
             It.IsAny<CancellationToken>()), Times.Never);
