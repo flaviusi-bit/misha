@@ -35,9 +35,31 @@ resource "aws_iam_role_policy" "github_actions_backup_permissions" {
           "backup:DescribeBackupVault",
           "backup:ListBackupPlans",
           "backup:ListBackupSelections",
-          "backup:ListRecoveryPointsByBackupVault"
+          "backup:ListRecoveryPointsByBackupVault",
+          "backup:CreateRestoreTestingPlan",
+          "backup:DeleteRestoreTestingPlan",
+          "backup:GetRestoreTestingPlan",
+          "backup:ListRestoreTestingPlans",
+          "backup:UpdateRestoreTestingPlan",
+          "backup:CreateRestoreTestingSelection",
+          "backup:DeleteRestoreTestingSelection",
+          "backup:GetRestoreTestingSelection",
+          "backup:ListRestoreTestingSelections",
+          "backup:UpdateRestoreTestingSelection",
+          "backup:ListRestoreJobs"
         ]
         Resource = "*"
+      },
+      {
+        Sid      = "AllowRestoreTestingServiceLinkedRole"
+        Effect   = "Allow"
+        Action   = ["iam:CreateServiceLinkedRole"]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "iam:AWSServiceName" = "restore-testing.backup.amazonaws.com"
+          }
+        }
       }
     ]
   })
