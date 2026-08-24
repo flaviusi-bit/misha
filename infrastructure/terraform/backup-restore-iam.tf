@@ -1,6 +1,5 @@
-resource "aws_iam_role_policy" "github_actions_backup_restore_testing" {
+resource "aws_iam_policy" "github_actions_backup_restore_testing" {
   name = "${local.name}-github-actions-backup-restore-testing"
-  role = aws_iam_role.github_actions_deploy.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -33,4 +32,9 @@ resource "aws_iam_role_policy" "github_actions_backup_restore_testing" {
       }
     ]
   })
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_backup_restore_testing" {
+  role       = aws_iam_role.github_actions_deploy.name
+  policy_arn = aws_iam_policy.github_actions_backup_restore_testing.arn
 }
