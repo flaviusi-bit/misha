@@ -1,12 +1,12 @@
 resource "terraform_data" "iam_policy_propagation" {
   triggers_replace = [
     sha256(aws_iam_role_policy.github_actions_deploy.policy),
-    sha256(aws_iam_role_policy.github_actions_backup_restore_testing.policy),
+    sha256(aws_iam_policy.github_actions_backup_restore_testing.policy),
   ]
 
   depends_on = [
     aws_iam_role_policy.github_actions_deploy,
-    aws_iam_role_policy.github_actions_backup_restore_testing,
+    aws_iam_role_policy_attachment.github_actions_backup_restore_testing,
   ]
 
   provisioner "local-exec" {
