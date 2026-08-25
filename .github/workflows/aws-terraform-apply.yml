@@ -105,11 +105,7 @@ jobs:
           set -euo pipefail
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
           POLICY_NAME="misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap"
-          POLICY_DOC=$(python3 - <<'PY'
-import json
-print(json.dumps({"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans"],"Resource":"*"}]}))
-PY
-)
+          POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans"],"Resource":"*"}]}'
           aws iam put-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --policy-document "$POLICY_DOC"
           sleep 10
 
