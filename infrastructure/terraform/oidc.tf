@@ -266,6 +266,7 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "arn:aws:iam::576984879588:role/${local.name}-backup"
       ] },
       { Effect = "Allow", Action = [
+        "iam:ListPolicyTags",
         "iam:TagPolicy",
         "iam:UntagPolicy"
       ], Resource = "arn:aws:iam::576984879588:policy/${local.name}-*" },
