@@ -8,7 +8,10 @@ on:
         required: true
         default: dev
         type: choice
-        options: [dev, staging, prod]
+        options:
+          - dev
+          - staging
+          - prod
       domain_name:
         description: "Production API domain name (required for prod)"
         required: false
@@ -51,7 +54,11 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
-          test "$GITHUB_REF" = "refs/heads/main" || { echo "ERROR: AWS Terraform Apply must be dispatched from main."; exit 1; }
+          test "$GITHUB_REF" = "refs/heads/main" || {
+            echo "ERROR: AWS Terraform Apply must be dispatched from main."
+            echo "Selected ref: $GITHUB_REF"
+            exit 1
+          }
 
       - name: Checkout
         uses: actions/checkout@v5
@@ -60,7 +67,10 @@ jobs:
         env:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
-          test -n "$AWS_DEPLOY_ROLE_ARN" || { echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."; exit 1; }
+          test -n "$AWS_DEPLOY_ROLE_ARN" || {
+            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
+            exit 1
+          }
 
       - name: Validate production inputs
         working-directory: .
@@ -122,7 +132,9 @@ PY
           set -euo pipefail
           if terraform state show aws_cloudwatch_dashboard.platform > cloudwatch-dashboard.state 2>/dev/null; then
             cat cloudwatch-dashboard.state
-            if grep -qi 'tainted' cloudwatch-dashboard.state; then terraform untaint aws_cloudwatch_dashboard.platform; fi
+            if grep -qi 'tainted' cloudwatch-dashboard.state; then
+              terraform untaint aws_cloudwatch_dashboard.platform
+            fi
           else
             echo "CloudWatch dashboard is not present in state; no taint mutation required."
           fi
@@ -165,7 +177,12 @@ PY
       - name: Verify managed application secret exists
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
-        run: aws secretsmanager describe-secret --secret-id "misha-${TARGET_ENVIRONMENT}/application" --query '{ARN:ARN,Name:Name}' --output table
+        run: |
+          SECRET_NAME="misha-${TARGET_ENVIRONMENT}/application"
+          aws secretsmanager describe-secret \
+            --secret-id "$SECRET_NAME" \
+            --query '{ARN:ARN,Name:Name}' \
+            --output table
 
       - name: Verify ECS execution policy references application secret
         env:
@@ -173,7 +190,11 @@ PY
         run: |
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-ecs-execution"
           POLICY_NAME="misha-${TARGET_ENVIRONMENT}-ecs-execution-secrets"
-          aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --query 'PolicyDocument.Statement[0].Resource' --output json
+          aws iam get-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --query 'PolicyDocument.Statement[0].Resource' \
+            --output json
 
       - name: Verify Terraform state is clean
         env:
@@ -201,7 +222,9 @@ PY
         run: |
           set -euo pipefail
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
-          aws iam delete-role-policy --role-name "$ROLE_NAME" --policy-name "misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap" || true
+          aws iam delete-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap" || true
 
       - name: Detach temporary VPC bootstrap policy
         if: always()
@@ -212,5 +235,11 @@ PY
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
           POLICY_ARN="arn:aws:iam::aws:policy/AmazonVPCFullAccess"
           aws iam detach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN" || true
-          REMAINING=$(aws iam list-attached-role-policies --role-name "$ROLE_NAME" --query "length(AttachedPolicies[?PolicyArn=='$POLICY_ARN'])" --output text)
-          test "$REMAINING" = "0" || { echo "ERROR: temporary AmazonVPCFullAccess policy is still attached."; exit 1; }
+          REMAINING=$(aws iam list-attached-role-policies \
+            --role-name "$ROLE_NAME" \
+            --query "length(AttachedPolicies[?PolicyArn=='$POLICY_ARN'])" \
+            --output text)
+          test "$REMAINING" = "0" || {
+            echo "ERROR: temporary AmazonVPCFullAccess policy is still attached."
+            exit 1
+          }
