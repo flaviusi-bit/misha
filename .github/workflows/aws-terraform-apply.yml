@@ -98,16 +98,16 @@ jobs:
         working-directory: .
         run: aws sts get-caller-identity
 
-      - name: Bootstrap temporary restore testing read permissions
+      - name: Bootstrap temporary Terraform IAM and restore testing permissions
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
         run: |
           set -euo pipefail
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
           POLICY_NAME="misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap"
-          POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans","backup:GetRestoreTestingSelection"],"Resource":"*"}]}'
+          POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans","backup:GetRestoreTestingSelection"],"Resource":"*"},{"Effect":"Allow","Action":["iam:CreatePolicy"],"Resource":"*"},{"Effect":"Allow","Action":["iam:ListPolicyTags","iam:TagPolicy","iam:UntagPolicy"],"Resource":"arn:aws:iam::576984879588:policy/misha-'"${TARGET_ENVIRONMENT}"'-*"}]}'
           aws iam put-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --policy-document "$POLICY_DOC"
-          sleep 10
+          sleep 20
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
