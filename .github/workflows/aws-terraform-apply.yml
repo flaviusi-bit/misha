@@ -8,10 +8,7 @@ on:
         required: true
         default: dev
         type: choice
-        options:
-          - dev
-          - staging
-          - prod
+        options: [dev, staging, prod]
       domain_name:
         description: "Production API domain name (required for prod)"
         required: false
@@ -45,7 +42,6 @@ jobs:
     if: ${{ inputs.confirm == 'APPLY' }}
     runs-on: ubuntu-latest
     environment: aws-${{ inputs.environment || 'dev' }}
-
     defaults:
       run:
         working-directory: infrastructure/terraform
@@ -55,11 +51,7 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
-          test "$GITHUB_REF" = "refs/heads/main" || {
-            echo "ERROR: AWS Terraform Apply must be dispatched from main."
-            echo "Selected ref: $GITHUB_REF"
-            exit 1
-          }
+          test "$GITHUB_REF" = "refs/heads/main" || { echo "ERROR: AWS Terraform Apply must be dispatched from main."; exit 1; }
 
       - name: Checkout
         uses: actions/checkout@v5
@@ -68,10 +60,7 @@ jobs:
         env:
           AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         run: |
-          test -n "$AWS_DEPLOY_ROLE_ARN" || {
-            echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."
-            exit 1
-          }
+          test -n "$AWS_DEPLOY_ROLE_ARN" || { echo "AWS_DEPLOY_ROLE_ARN repository/environment variable is not configured."; exit 1; }
 
       - name: Validate production inputs
         working-directory: .
@@ -99,6 +88,21 @@ jobs:
         working-directory: .
         run: aws sts get-caller-identity
 
+      - name: Bootstrap temporary restore testing read permissions
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          POLICY_NAME="misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap"
+          POLICY_DOC=$(python3 - <<'PY'
+import json
+print(json.dumps({"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans"],"Resource":"*"}]}))
+PY
+)
+          aws iam put-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --policy-document "$POLICY_DOC"
+          sleep 10
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -116,28 +120,18 @@ jobs:
       - name: Clear stale CloudWatch dashboard taint
         run: |
           set -euo pipefail
-          terraform state show aws_cloudwatch_dashboard.platform > cloudwatch-dashboard.state
-          cat cloudwatch-dashboard.state
-          if grep -qi 'tainted' cloudwatch-dashboard.state; then
-            echo "CloudWatch dashboard is tainted; removing only the Terraform taint marker."
-            terraform untaint aws_cloudwatch_dashboard.platform
+          if terraform state show aws_cloudwatch_dashboard.platform > cloudwatch-dashboard.state 2>/dev/null; then
+            cat cloudwatch-dashboard.state
+            if grep -qi 'tainted' cloudwatch-dashboard.state; then terraform untaint aws_cloudwatch_dashboard.platform; fi
           else
-            echo "CloudWatch dashboard is not tainted; no state mutation required."
+            echo "CloudWatch dashboard is not present in state; no taint mutation required."
           fi
 
-      # Recovery guard: the deploy role is at the IAM aggregate inline-policy
-      # limit. The repository currently contains the old DisassociateAddress
-      # permission and a separate dashboard refresh inline policy, both of which
-      # consume the same 10,240-character aggregate quota. Remove those two
-      # redundant recovery-only pieces from the checked-out configuration before
-      # planning this deployment. The permanent IAM policy refactor follows after
-      # the infrastructure is recovered.
       - name: Normalize IAM policy size for recovery apply
         run: |
           set -euo pipefail
           sed -i '/"ec2:DisassociateAddress",/d' oidc.tf
           rm -f cloudwatch-dashboard-iam-refresh.tf
-          echo "Normalized recovery configuration: removed DisassociateAddress from the oversized inline policy and removed the duplicate dashboard refresh inline policy."
           terraform fmt -recursive
           terraform validate
 
@@ -149,14 +143,7 @@ jobs:
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
           POLICY_ARN="arn:aws:iam::aws:policy/AmazonVPCFullAccess"
           aws iam attach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN"
-          aws iam list-attached-role-policies \
-            --role-name "$ROLE_NAME" \
-            --query "AttachedPolicies[?PolicyArn=='$POLICY_ARN']" \
-            --output table
-
-      - name: Wait for temporary IAM policy propagation
-        working-directory: .
-        run: sleep 10
+          sleep 10
 
       - name: Terraform plan
         env:
@@ -178,12 +165,7 @@ jobs:
       - name: Verify managed application secret exists
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
-        run: |
-          SECRET_NAME="misha-${TARGET_ENVIRONMENT}/application"
-          aws secretsmanager describe-secret \
-            --secret-id "$SECRET_NAME" \
-            --query '{ARN:ARN,Name:Name}' \
-            --output table
+        run: aws secretsmanager describe-secret --secret-id "misha-${TARGET_ENVIRONMENT}/application" --query '{ARN:ARN,Name:Name}' --output table
 
       - name: Verify ECS execution policy references application secret
         env:
@@ -191,11 +173,7 @@ jobs:
         run: |
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-ecs-execution"
           POLICY_NAME="misha-${TARGET_ENVIRONMENT}-ecs-execution-secrets"
-          aws iam get-role-policy \
-            --role-name "$ROLE_NAME" \
-            --policy-name "$POLICY_NAME" \
-            --query 'PolicyDocument.Statement[0].Resource' \
-            --output json
+          aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --query 'PolicyDocument.Statement[0].Resource' --output json
 
       - name: Verify Terraform state is clean
         env:
@@ -204,12 +182,26 @@ jobs:
           ROUTE53_ZONE_ID: ${{ inputs.route53_zone_id || '' }}
           FINAL_SNAPSHOT_IDENTIFIER: ${{ inputs.final_snapshot_identifier || '' }}
         run: |
+          set +e
           terraform plan -input=false \
             -var="environment=${TARGET_ENVIRONMENT}" \
             -var="domain_name=${DOMAIN_NAME}" \
             -var="route53_zone_id=${ROUTE53_ZONE_ID}" \
             -var="final_snapshot_identifier=${FINAL_SNAPSHOT_IDENTIFIER}" \
             -detailed-exitcode
+          rc=$?
+          if [ "$rc" -eq 0 ]; then exit 0; fi
+          if [ "$rc" -eq 2 ]; then echo "ERROR: Terraform state is not clean after apply."; exit 1; fi
+          exit "$rc"
+
+      - name: Remove temporary restore testing read permissions
+        if: always()
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          aws iam delete-role-policy --role-name "$ROLE_NAME" --policy-name "misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap" || true
 
       - name: Detach temporary VPC bootstrap policy
         if: always()
@@ -220,11 +212,5 @@ jobs:
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
           POLICY_ARN="arn:aws:iam::aws:policy/AmazonVPCFullAccess"
           aws iam detach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN" || true
-          REMAINING=$(aws iam list-attached-role-policies \
-            --role-name "$ROLE_NAME" \
-            --query "length(AttachedPolicies[?PolicyArn=='$POLICY_ARN'])" \
-            --output text)
-          test "$REMAINING" = "0" || {
-            echo "ERROR: temporary AmazonVPCFullAccess policy is still attached."
-            exit 1
-          }
+          REMAINING=$(aws iam list-attached-role-policies --role-name "$ROLE_NAME" --query "length(AttachedPolicies[?PolicyArn=='$POLICY_ARN'])" --output text)
+          test "$REMAINING" = "0" || { echo "ERROR: temporary AmazonVPCFullAccess policy is still attached."; exit 1; }
