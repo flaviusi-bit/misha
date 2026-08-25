@@ -81,6 +81,47 @@ jobs:
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
+      # Terraform refreshes aws_backup_restore_testing_plan before it can
+      # evaluate the managed policy that grants these permissions. Bootstrap
+      # only the read actions needed for that refresh, then remove the temporary
+      # inline policy after the plan. The permanent managed policy remains owned
+      # by Terraform in backup-restore-iam.tf.
+      - name: Bootstrap temporary restore testing read permissions
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          POLICY_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-restore-testing-refresh"
+          cat > /tmp/restore-testing-refresh.json <<'EOF'
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "backup:GetRestoreTestingPlan",
+                  "backup:ListRestoreTestingPlans",
+                  "backup:GetRestoreTestingSelection",
+                  "backup:ListRestoreTestingSelections",
+                  "backup:ListRestoreJobs"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+          EOF
+          aws iam put-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --policy-document file:///tmp/restore-testing-refresh.json
+          aws iam get-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" \
+            --query 'PolicyName' \
+            --output text
+          sleep 10
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -116,13 +157,29 @@ jobs:
           )
 
           # PR plans must be non-mutating and cannot depend on IAM permissions
-          # introduced by the same PR. The apply workflow bootstraps those
-          # permissions before its real refresh/plan. For PR validation, disable
-          # state refresh so Terraform can evaluate the proposed configuration
-          # without requiring the new CloudWatch dashboard read permission to
-          # already exist in AWS.
+          # introduced by the same PR. For PR validation, disable state refresh
+          # so Terraform can evaluate the proposed configuration without
+          # requiring new AWS permissions to already exist.
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
             PLAN_ARGS+=( -refresh=false )
           fi
 
           terraform plan "${PLAN_ARGS[@]}"
+
+      - name: Remove temporary restore testing read permissions
+        if: always()
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          POLICY_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-restore-testing-refresh"
+          aws iam delete-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" || true
+          if aws iam get-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "$POLICY_NAME" >/dev/null 2>&1; then
+            echo "ERROR: temporary restore testing refresh policy is still present."
+            exit 1
+          fi
