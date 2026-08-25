@@ -1,6 +1,8 @@
 resource "aws_iam_policy" "github_actions_backup_restore_testing" {
   name = "${local.name}-github-actions-backup-restore-testing"
 
+  depends_on = [aws_iam_role_policy.github_actions_deploy]
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
