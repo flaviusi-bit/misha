@@ -105,7 +105,7 @@ jobs:
           set -euo pipefail
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
           POLICY_NAME="misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap"
-          POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans","backup:GetRestoreTestingSelection"],"Resource":"*"},{"Effect":"Allow","Action":["iam:CreatePolicy"],"Resource":"*"},{"Effect":"Allow","Action":["iam:ListPolicyTags","iam:TagPolicy","iam:UntagPolicy"],"Resource":"arn:aws:iam::576984879588:policy/misha-'"${TARGET_ENVIRONMENT}"'-*"}]}'
+          POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans","backup:GetRestoreTestingSelection"],"Resource":"*"},{"Effect":"Allow","Action":["iam:CreatePolicy"],"Resource":"*"},{"Effect":"Allow","Action":["iam:GetPolicy","iam:GetPolicyVersion","iam:ListPolicyVersions","iam:CreatePolicyVersion","iam:DeletePolicyVersion","iam:ListPolicyTags","iam:TagPolicy","iam:UntagPolicy","iam:DeletePolicy"],"Resource":"arn:aws:iam::576984879588:policy/misha-'"${TARGET_ENVIRONMENT}"'-*"}]}'
           aws iam put-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --policy-document "$POLICY_DOC"
           sleep 20
 
