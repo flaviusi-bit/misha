@@ -98,16 +98,27 @@ jobs:
         working-directory: .
         run: aws sts get-caller-identity
 
-      - name: Bootstrap temporary Terraform IAM and restore testing permissions
+      - name: Bootstrap temporary restore testing permissions
         env:
           TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
         run: |
           set -euo pipefail
           ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
           POLICY_NAME="misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap"
-          POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans","backup:GetRestoreTestingSelection"],"Resource":"*"},{"Effect":"Allow","Action":["iam:CreatePolicy"],"Resource":"*"},{"Effect":"Allow","Action":["iam:GetPolicy","iam:GetPolicyVersion","iam:ListPolicyVersions","iam:CreatePolicyVersion","iam:DeletePolicyVersion","iam:ListPolicyTags","iam:TagPolicy","iam:UntagPolicy","iam:DeletePolicy"],"Resource":"arn:aws:iam::576984879588:policy/misha-'"${TARGET_ENVIRONMENT}"'-*"}]}'
+          POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["backup:GetRestoreTestingPlan","backup:ListRestoreTestingPlans","backup:GetRestoreTestingSelection"],"Resource":"*"}]}'
           aws iam put-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --policy-document "$POLICY_DOC"
-          sleep 20
+          sleep 10
+
+      - name: Bootstrap temporary Terraform IAM lifecycle permissions
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          POLICY_NAME="misha-${TARGET_ENVIRONMENT}-terraform-iam-bootstrap"
+          POLICY_DOC='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["iam:CreatePolicy"],"Resource":"*"},{"Effect":"Allow","Action":["iam:GetPolicy","iam:GetPolicyVersion","iam:ListPolicyVersions","iam:CreatePolicyVersion","iam:DeletePolicyVersion","iam:ListPolicyTags","iam:TagPolicy","iam:UntagPolicy","iam:DeletePolicy"],"Resource":"arn:aws:iam::576984879588:policy/misha-'"${TARGET_ENVIRONMENT}"'-*"}]}'
+          aws iam put-role-policy --role-name "$ROLE_NAME" --policy-name "$POLICY_NAME" --policy-document "$POLICY_DOC"
+          sleep 10
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -221,6 +232,17 @@ jobs:
           aws iam delete-role-policy \
             --role-name "$ROLE_NAME" \
             --policy-name "misha-${TARGET_ENVIRONMENT}-restore-testing-plan-read-bootstrap" || true
+
+      - name: Remove temporary Terraform IAM lifecycle permissions
+        if: always()
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          aws iam delete-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-name "misha-${TARGET_ENVIRONMENT}-terraform-iam-bootstrap" || true
 
       - name: Detach temporary VPC bootstrap policy
         if: always()
