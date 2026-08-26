@@ -162,11 +162,22 @@ jobs:
           import sys
           from datetime import datetime, timezone
 
+          def parse_aws_datetime(value):
+              if not value:
+                  return None
+              if isinstance(value, (int, float)):
+                  return datetime.fromtimestamp(value, tz=timezone.utc)
+              return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
           jobs = json.loads(sys.argv[1]).get("RestoreJobs", [])
           if not jobs:
               raise SystemExit("DR validation failed: no RDS restore test completed within the last 8 days.")
 
-          jobs.sort(key=lambda job: job.get("CreationDate", 0), reverse=True)
+          jobs.sort(
+              key=lambda job: parse_aws_datetime(job.get("CreationDate"))
+              or datetime.min.replace(tzinfo=timezone.utc),
+              reverse=True,
+          )
           latest = jobs[0]
 
           print(f"Restore job: {latest.get('RestoreJobId')}")
@@ -181,10 +192,10 @@ jobs:
           if latest.get("DeletionStatus") == "FAILED":
               raise SystemExit("DR validation failed: restore-test resource cleanup failed.")
 
-          created = latest.get("CreationDate")
-          completed = latest.get("CompletionDate")
+          created = parse_aws_datetime(latest.get("CreationDate"))
+          completed = parse_aws_datetime(latest.get("CompletionDate"))
           if created and completed:
-              duration_minutes = (completed - created) / 60
+              duration_minutes = (completed - created).total_seconds() / 60
               print(f"Restore duration: {duration_minutes:.2f} minutes")
 
           print("Recent RDS restore test completed successfully.")
