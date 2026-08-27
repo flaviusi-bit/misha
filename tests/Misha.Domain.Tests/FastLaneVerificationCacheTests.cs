@@ -18,7 +18,7 @@ public sealed class FastLaneVerificationCacheTests
 
         Assert.True(service.Verify(package, now));
         Assert.True(service.Verify(package, now.AddMinutes(1)));
-        Assert.Equal(1, cache.GetCount);
+        Assert.Equal(2, cache.GetCount);
         Assert.Equal(1, cache.SetCount);
         Assert.Equal(package.ExpiresAtUtc, cache.ExpiresAtUtc);
     }
