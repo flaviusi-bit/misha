@@ -93,8 +93,8 @@ public static class EtaServiceRegistration
             catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
         }).RequireAuthorization();
 
-        app.MapPost("/fast-lane/verify", (FastLanePackage package) =>
-            Results.Ok(new { valid = FastLaneVerifier.Verify(package, DateTimeOffset.UtcNow) }))
+        app.MapPost("/fast-lane/verify", (FastLanePackage package, FastLaneVerificationService verifier) =>
+            Results.Ok(new { valid = verifier.Verify(package, DateTimeOffset.UtcNow) }))
             .RequireAuthorization();
     }
 
