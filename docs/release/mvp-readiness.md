@@ -45,6 +45,8 @@ Authentication
 
 The repository currently has implemented slices for the critical path through eTA verification, plus payment reconciliation, cryptographic eTA trust, audit history, and the first manual-review queue implementation.
 
+Document capabilities now implemented and deployed include traveller profile, pre-signed upload/download transfer, a content-safety validation boundary, and explicit document deletion with S3 and PostgreSQL cleanup.
+
 Manual review now supports:
 
 - automatic queue creation when the decision engine returns `ManualReview`
