@@ -38,7 +38,7 @@ public sealed class InMemoryRedisCache : IRedisCache
         ArgumentException.ThrowIfNullOrEmpty(key);
         ArgumentNullException.ThrowIfNull(value);
 
-        var expiresAtUtc = expiration is { } ttl
+        DateTimeOffset? expiresAtUtc = expiration is { } ttl
             ? DateTimeOffset.UtcNow.Add(ttl)
             : null;
 
