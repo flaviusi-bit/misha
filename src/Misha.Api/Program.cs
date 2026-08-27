@@ -168,6 +168,7 @@ app.MapEtaEndpoints();
 DecisionEndpoints.Map(app);
 ManualReviewEndpoints.Map(app);
 NotificationEndpoints.Map(app);
+ApplicantEndpoints.Map(app);
 
 app.MapPost("/applications", async (CreateApplicationRequest request, HttpRequest httpRequest, ApplicationService service, CancellationToken ct) =>
 {
