@@ -25,7 +25,7 @@ public sealed class FastLaneVerificationService(IFastLaneVerificationCache cache
     {
         var canonical = string.Join("|", package.Version, package.EtaNumber,
             package.IssuedAtUtc.ToUnixTimeSeconds(), package.ExpiresAtUtc.ToUnixTimeSeconds(),
-            package.KeyId, package.SigningAlgorithm, package.Signature, package.PublicKeyPem);
+            package.SigningKeyId, package.SigningAlgorithm, package.Signature, package.PublicKeyPem);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
     }
 }
