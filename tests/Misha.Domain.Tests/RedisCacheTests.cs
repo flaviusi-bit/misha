@@ -1,4 +1,5 @@
 using Misha.Infrastructure.Caching;
+using Xunit;
 
 namespace Misha.Domain.Tests;
 
