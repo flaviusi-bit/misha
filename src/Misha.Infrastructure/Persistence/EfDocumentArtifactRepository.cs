@@ -20,6 +20,12 @@ public sealed class EfDocumentArtifactRepository(MishaDbContext db) : IDocumentA
         return Task.CompletedTask;
     }
 
+    public Task DeleteAsync(DocumentArtifact document, CancellationToken cancellationToken)
+    {
+        db.DocumentArtifacts.Remove(document);
+        return Task.CompletedTask;
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken) =>
         db.SaveChangesAsync(cancellationToken);
 }
