@@ -7,7 +7,8 @@ namespace Misha.Application.Documents;
 public sealed class DocumentService(
     IApplicationRepository applications,
     IDocumentArtifactRepository documents,
-    IDocumentStorage storage)
+    IDocumentStorage storage,
+    IContentSafetyScanner contentSafetyScanner)
 {
     private const long MaxDocumentSizeBytes = 25 * 1024 * 1024;
     private const int CopyBufferSize = 64 * 1024;
@@ -36,6 +37,11 @@ public sealed class DocumentService(
             await buffer.WriteAsync(copyBuffer.AsMemory(0, bytesRead), cancellationToken);
         }
         if (totalBytes <= 0) throw new ArgumentException("Document content is empty.", nameof(content));
+
+        buffer.Position = 0;
+        var safety = await contentSafetyScanner.ScanAsync(buffer, fileName.Trim(), contentType.Trim(), cancellationToken);
+        if (!safety.Allowed)
+            throw new ArgumentException(safety.Reason ?? "Document content was rejected by the safety validation boundary.", nameof(content));
 
         var bytes = buffer.ToArray();
         var sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
