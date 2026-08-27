@@ -1,6 +1,8 @@
 resource "aws_iam_policy" "github_actions_backup_restore_testing" {
   name = "${local.name}-github-actions-backup-restore-testing"
 
+  depends_on = [aws_iam_role_policy.github_actions_iam_refresh]
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -16,7 +18,8 @@ resource "aws_iam_policy" "github_actions_backup_restore_testing" {
           "backup:DeleteRestoreTestingSelection",
           "backup:GetRestoreTestingSelection",
           "backup:ListRestoreTestingSelections",
-          "backup:UpdateRestoreTestingSelection"
+          "backup:UpdateRestoreTestingSelection",
+          "backup:ListRestoreJobs"
         ]
         Resource = "*"
       },
