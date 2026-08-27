@@ -19,6 +19,8 @@ public static class ApplicantEndpoints
         app.MapPut("/applicants/{id:guid}/profile", async (
             Guid id,
             ApplicantProfileRequest request,
+            HttpContext httpContext,
+            ILoggerFactory loggerFactory,
             MishaDbContext db,
             CancellationToken ct) =>
         {
@@ -28,6 +30,8 @@ public static class ApplicantEndpoints
 
             try
             {
+                var identity = AuditIdentityContext.From(httpContext);
+
                 applicant.SetProfile(new ApplicantProfile(
                     request.FirstName,
                     request.LastName,
@@ -40,6 +44,14 @@ public static class ApplicantEndpoints
                     request.PhoneNumber));
 
                 await db.SaveChangesAsync(ct);
+
+                loggerFactory.CreateLogger("Misha.Security.Audit").LogInformation(
+                    "Applicant profile updated. ApplicantId={ApplicantId} ActorSubject={ActorSubject} ClientId={ClientId} ProfileCompleted={ProfileCompleted}",
+                    applicant.Id,
+                    identity.Subject,
+                    identity.ClientId,
+                    applicant.ProfileCompleted);
+
                 return Results.Ok(ToResponse(applicant));
             }
             catch (ArgumentException ex)
