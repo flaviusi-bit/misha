@@ -46,6 +46,39 @@ public sealed class S3DocumentStorage(IAmazonS3 client, string bucketName) : IDo
             cancellationToken);
     }
 
+    public Uri CreatePreSignedUploadUrl(string storageKey, string contentType, TimeSpan lifetime)
+    {
+        ValidateConfiguration();
+        ValidateStorageKey(storageKey);
+        ValidateLifetime(lifetime);
+        if (string.IsNullOrWhiteSpace(contentType) || contentType.Length > 127 || contentType.Contains('\r') || contentType.Contains('\n'))
+            throw new ArgumentException("A valid content type is required.", nameof(contentType));
+
+        return new Uri(client.GetPreSignedURL(new GetPreSignedUrlRequest
+        {
+            BucketName = bucketName,
+            Key = storageKey,
+            Verb = HttpVerb.PUT,
+            Expires = DateTime.UtcNow.Add(lifetime),
+            ContentType = contentType.Trim()
+        }));
+    }
+
+    public Uri CreatePreSignedDownloadUrl(string storageKey, TimeSpan lifetime)
+    {
+        ValidateConfiguration();
+        ValidateStorageKey(storageKey);
+        ValidateLifetime(lifetime);
+
+        return new Uri(client.GetPreSignedURL(new GetPreSignedUrlRequest
+        {
+            BucketName = bucketName,
+            Key = storageKey,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.Add(lifetime)
+        }));
+    }
+
     private void ValidateConfiguration()
     {
         if (client is null)
@@ -53,6 +86,12 @@ public sealed class S3DocumentStorage(IAmazonS3 client, string bucketName) : IDo
 
         if (string.IsNullOrWhiteSpace(bucketName))
             throw new InvalidOperationException("Document storage S3 bucket is not configured.");
+    }
+
+    private static void ValidateLifetime(TimeSpan lifetime)
+    {
+        if (lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromMinutes(15))
+            throw new ArgumentOutOfRangeException(nameof(lifetime), "Pre-signed URL lifetime must be greater than zero and no more than 15 minutes.");
     }
 
     private static void ValidateStorageKey(string storageKey)

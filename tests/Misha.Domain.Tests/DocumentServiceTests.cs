@@ -104,5 +104,7 @@ public sealed class DocumentServiceTests
     {
         public Task UploadAsync(string storageKey, Stream content, string contentType, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task DeleteAsync(string storageKey, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Uri CreatePreSignedUploadUrl(string storageKey, string contentType, TimeSpan lifetime) => new($"https://example.test/{storageKey}");
+        public Uri CreatePreSignedDownloadUrl(string storageKey, TimeSpan lifetime) => new($"https://example.test/{storageKey}");
     }
 }
