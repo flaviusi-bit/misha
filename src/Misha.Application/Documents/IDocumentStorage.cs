@@ -9,4 +9,8 @@ public interface IDocumentStorage
         CancellationToken cancellationToken);
 
     Task DeleteAsync(string storageKey, CancellationToken cancellationToken);
+
+    Uri CreatePreSignedUploadUrl(string storageKey, string contentType, TimeSpan lifetime);
+
+    Uri CreatePreSignedDownloadUrl(string storageKey, TimeSpan lifetime);
 }
