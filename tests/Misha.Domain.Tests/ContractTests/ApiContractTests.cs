@@ -20,7 +20,6 @@ public sealed class ApiContractTests : IClassFixture<ApiContractFactory>
     public async Task Live_health_endpoint_returns_success_and_healthy_payload()
     {
         using var response = await _client.GetAsync("/health/live");
-
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Healthy", await response.Content.ReadAsStringAsync());
     }
@@ -29,7 +28,6 @@ public sealed class ApiContractTests : IClassFixture<ApiContractFactory>
     public async Task Ready_health_endpoint_returns_success_when_database_is_available()
     {
         using var response = await _client.GetAsync("/health/ready");
-
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Healthy", await response.Content.ReadAsStringAsync());
     }
@@ -38,7 +36,6 @@ public sealed class ApiContractTests : IClassFixture<ApiContractFactory>
     public async Task Protected_application_create_endpoint_rejects_unauthenticated_request()
     {
         using var response = await _client.PostAsJsonAsync("/applications", new { ApplicantReference = "contract-test" });
-
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }
@@ -53,10 +50,15 @@ public sealed class ApiContractFactory : WebApplicationFactory<Program>, IAsyncL
 
     public Task InitializeAsync() => _postgres.StartAsync();
 
-    public override async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await _postgres.DisposeAsync();
         await base.DisposeAsync();
+    }
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        await DisposeAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
