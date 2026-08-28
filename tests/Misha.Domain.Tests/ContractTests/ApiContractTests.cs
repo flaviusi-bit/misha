@@ -53,23 +53,17 @@ public sealed class ApiContractFactory : WebApplicationFactory<Program>, IAsyncL
 
     public Task InitializeAsync() => _postgres.StartAsync();
 
-    public async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await _postgres.DisposeAsync();
-        Dispose();
+        await base.DisposeAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration((_, configuration) =>
-        {
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:Misha"] = _postgres.GetConnectionString(),
-                ["Authentication:Authority"] = "https://localhost:5001/",
-                ["Authentication:Audience"] = "contract-tests",
-                ["Authentication:ApiIdentifier"] = "https://misha-api"
-            });
-        });
+        builder.UseSetting("ConnectionStrings:Misha", _postgres.GetConnectionString());
+        builder.UseSetting("Authentication:Authority", "https://localhost:5001/");
+        builder.UseSetting("Authentication:Audience", "contract-tests");
+        builder.UseSetting("Authentication:ApiIdentifier", "https://misha-api");
     }
 }
