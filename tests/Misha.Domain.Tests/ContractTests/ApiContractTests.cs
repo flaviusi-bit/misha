@@ -53,7 +53,7 @@ public sealed class ApiContractFactory : WebApplicationFactory<Program>, IAsyncL
 
     public Task InitializeAsync() => _postgres.StartAsync();
 
-    public override async ValueTask DisposeAsync()
+    public async Task DisposeAsync()
     {
         await _postgres.DisposeAsync();
         await base.DisposeAsync();
