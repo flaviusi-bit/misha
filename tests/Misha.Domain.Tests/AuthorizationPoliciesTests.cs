@@ -124,6 +124,56 @@ public sealed class AuthorizationPoliciesTests
         Assert.False(result.Succeeded);
     }
 
+    [Fact]
+    public async Task Policy_Denies_Unauthenticated_User()
+    {
+        var authorization = BuildAuthorization();
+
+        var result = await authorization.AuthorizeAsync(UnauthenticatedUser(), null, AuthorizationPolicies.ApiRead);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task Policy_Denies_ValidGroup_WithScopeForDifferentApi()
+    {
+        var authorization = BuildAuthorization();
+
+        var result = await authorization.AuthorizeAsync(UserWithScope("misha-admin", "https://other-api", "write"), null, AuthorizationPolicies.ApiWrite);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task Policy_Denies_ValidGroup_WithAlmostMatchingScope()
+    {
+        var authorization = BuildAuthorization();
+
+        var result = await authorization.AuthorizeAsync(UserWithScope("misha-admin", ApiIdentifier, "write-extra"), null, AuthorizationPolicies.ApiWrite);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task Policy_Denies_ValidScope_WithoutAuthorizedGroup()
+    {
+        var authorization = BuildAuthorization();
+
+        var result = await authorization.AuthorizeAsync(User("misha-unknown", "write"), null, AuthorizationPolicies.ApiWrite);
+
+        Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task Policy_Denies_ReviewWrite_For_Operator_EvenWithScope()
+    {
+        var authorization = BuildAuthorization();
+
+        var result = await authorization.AuthorizeAsync(User("misha-operator", "review.write"), null, AuthorizationPolicies.ReviewWrite);
+
+        Assert.False(result.Succeeded);
+    }
+
     private static IAuthorizationService BuildAuthorization()
     {
         var services = new ServiceCollection();
@@ -132,15 +182,21 @@ public sealed class AuthorizationPoliciesTests
         return services.BuildServiceProvider().GetRequiredService<IAuthorizationService>();
     }
 
-    private static ClaimsPrincipal User(string group, params string[] scopes)
+    private static ClaimsPrincipal User(string group, params string[] scopes) =>
+        UserWithScope(group, ApiIdentifier, scopes);
+
+    private static ClaimsPrincipal UserWithScope(string group, string apiIdentifier, params string[] scopes)
     {
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, "test-user"),
             new("cognito:groups", group),
-            new("scope", string.Join(' ', scopes.Select(scope => $"{ApiIdentifier}/{scope}")))
+            new("scope", string.Join(' ', scopes.Select(scope => $"{apiIdentifier}/{scope}")))
         };
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
     }
+
+    private static ClaimsPrincipal UnauthenticatedUser() =>
+        new(new ClaimsIdentity());
 }
