@@ -1,12 +1,14 @@
 import http from 'k6/http';
 import { check } from 'k6';
 
+const duration = __ENV.K6_DURATION || '30s';
+
 export const options = {
   scenarios: {
     smoke: {
       executor: 'constant-vus',
       vus: 5,
-      duration: '30s',
+      duration,
     },
   },
   thresholds: {
