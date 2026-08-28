@@ -1,0 +1,37 @@
+name: Performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Base URL of the deployed API, without trailing slash'
+        required: true
+        type: string
+      duration:
+        description: 'Load duration'
+        required: false
+        default: '30s'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  k6:
+    name: k6 performance baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Execute performance baseline
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          K6_DURATION: ${{ inputs.duration || '30s' }}
+        run: |
+          set -euo pipefail
+          k6 run performance/k6/health-live.js
