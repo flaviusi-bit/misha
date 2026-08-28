@@ -12,8 +12,6 @@ on:
         required: false
         default: '30s'
         type: string
-  push:
-    branches: []
 
 permissions:
   contents: read
