@@ -1,17 +1,20 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Misha.Application.Applications;
 using Misha.Application.Messaging;
 using Misha.Application.Notifications;
+using Misha.Application.Retention;
 using Misha.Infrastructure.Messaging;
 using Misha.Infrastructure.Notifications;
 using Misha.Infrastructure.Observability;
 using Misha.Infrastructure.Persistence;
+using Misha.Infrastructure.Retention;
 using Misha.Worker;
 
 var builder = new HostApplicationBuilder(args);
 
 builder.Services.AddMishaOpenTelemetry(builder.Configuration, "misha-worker", includeAspNetCoreInstrumentation: false);
+builder.Services.Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("Misha");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -55,7 +58,9 @@ builder.Services.AddScoped<IOutboxDispatcher>(sp => new SqsOutboxDispatcher(
     queueUrl,
     sp.GetRequiredService<ILogger<SqsOutboxDispatcher>>()));
 
+builder.Services.AddScoped<IRetentionPurgeService, RetentionPurgeService>();
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<RetentionWorker>();
 
 var host = builder.Build();
 host.Run();

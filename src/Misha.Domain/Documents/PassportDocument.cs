@@ -79,4 +79,15 @@ public sealed class PassportDocument
     }
 
     public bool IsExpired(DateOnly asOf) => ExpiryDate < asOf;
+
+    public void Anonymize()
+    {
+        DocumentNumber = $"ANON-{Id:N}";
+        IssuingCountry = "ZZZ";
+        Surname = "ANONYMIZED";
+        GivenNames = "ANONYMIZED";
+        DateOfBirth = new DateOnly(1900, 1, 1);
+        Nationality = "ZZZ";
+        ExpiryDate = new DateOnly(1900, 1, 1);
+    }
 }
