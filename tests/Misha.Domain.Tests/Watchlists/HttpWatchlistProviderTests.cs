@@ -28,7 +28,7 @@ public sealed class HttpWatchlistProviderTests
         Assert.True(request.Headers.TryGetValues("X-API-Key", out var apiKeys));
         Assert.Equal("test-api-key", Assert.Single(apiKeys));
 
-        var body = await request.Content!.ReadAsStringAsync();
+        var body = Assert.Single(handler.RequestBodies);
         Assert.Contains("\"DocumentNumber\":\"AB123456\"", body);
         Assert.Contains("\"IssuingCountry\":\"ROU\"", body);
         Assert.Contains("\"Surname\":\"DOE\"", body);
@@ -114,11 +114,17 @@ public sealed class HttpWatchlistProviderTests
     private sealed class RecordingHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {
         public List<HttpRequestMessage> Requests { get; } = [];
+        public List<string> RequestBodies { get; } = [];
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Add(request);
-            return Task.FromResult(responder(request));
+            if (request.Content is not null)
+            {
+                RequestBodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
+            }
+
+            return responder(request);
         }
     }
 }
