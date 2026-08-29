@@ -8,21 +8,23 @@ on:
       - 'src/**'
       - 'tests/**'
       - 'Misha.slnx'
+      - 'global.json'
       - '**/*.csproj'
       - '**/*.props'
       - '**/*.targets'
       - 'NuGet.config'
-      - '.github/workflows/security.yml'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'src/**'
       - 'tests/**'
       - 'Misha.slnx'
+      - 'global.json'
       - '**/*.csproj'
       - '**/*.props'
       - '**/*.targets'
       - 'NuGet.config'
-      - '.github/workflows/security.yml'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 permissions:

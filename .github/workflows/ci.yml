@@ -9,23 +9,25 @@ on:
       - 'src/**'
       - 'tests/**'
       - 'Misha.slnx'
+      - 'global.json'
       - '**/*.csproj'
       - '**/*.props'
       - '**/*.targets'
       - '**/Dockerfile*'
       - 'NuGet.config'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'src/**'
       - 'tests/**'
       - 'Misha.slnx'
+      - 'global.json'
       - '**/*.csproj'
       - '**/*.props'
       - '**/*.targets'
       - '**/Dockerfile*'
       - 'NuGet.config'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 permissions:
@@ -78,11 +80,6 @@ jobs:
         working-directory: infrastructure/terraform
         run: terraform validate
 
-      - name: Setup Terraform for state bootstrap
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.10.x'
-
       - name: Terraform bootstrap init
         working-directory: infrastructure/terraform-bootstrap
         run: terraform init
@@ -91,4 +88,4 @@ jobs:
         working-directory: infrastructure/terraform-bootstrap
         run: terraform validate
 
-# CI runs for application/container changes. Terraform-only changes are validated by the Terraform Plan workflow.
+# CI runs for application/container changes and workflow changes. Terraform-only changes are validated by the Terraform Plan workflow.
