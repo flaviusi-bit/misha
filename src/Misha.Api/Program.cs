@@ -41,7 +41,26 @@ builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactReposi
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
 builder.Services.AddHttpClient("watchlist", client => client.Timeout = TimeSpan.FromSeconds(10));
-builder.Services.AddScoped<IWatchlistProvider>(sp => { var configuration = sp.GetRequiredService<IConfiguration>(); var providerName = configuration["Watchlist:ProviderName"]?.Trim(); return string.Equals(providerName, "dev-mock", StringComparison.OrdinalIgnoreCase) ? new MockWatchlistProvider() : new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), configuration); });
+var watchlistProviderSections = builder.Configuration.GetSection("Watchlist:Providers").GetChildren().ToArray();
+if (watchlistProviderSections.Length > 0)
+{
+    foreach (var section in watchlistProviderSections)
+    {
+        builder.Services.AddScoped<IWatchlistProvider>(sp =>
+            new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), builder.Configuration, section.Path));
+    }
+}
+else
+{
+    builder.Services.AddScoped<IWatchlistProvider>(sp =>
+    {
+        var configuration = sp.GetRequiredService<IConfiguration>();
+        var providerName = configuration["Watchlist:ProviderName"]?.Trim();
+        return string.Equals(providerName, "dev-mock", StringComparison.OrdinalIgnoreCase)
+            ? new MockWatchlistProvider()
+            : new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), configuration);
+    });
+}
 builder.Services.AddScoped<IPassportVerificationProvider, HttpPassportVerificationProvider>();
 builder.Services.AddHttpClient("passport-verification", client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddSingleton<IFastLaneVerificationCache, InMemoryFastLaneVerificationCache>();
