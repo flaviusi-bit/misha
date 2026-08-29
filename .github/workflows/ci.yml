@@ -5,11 +5,35 @@ on:
     branches:
       - main
       - feature/eta-qr-verification
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Misha.slnx'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '**/Dockerfile*'
+      - 'NuGet.config'
+      - '.github/workflows/ci.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Misha.slnx'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '**/Dockerfile*'
+      - 'NuGet.config'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
@@ -67,4 +91,4 @@ jobs:
         working-directory: infrastructure/terraform-bootstrap
         run: terraform validate
 
-# CI trigger verification: run on every main/feature push and pull request.
+# CI runs for application/container changes. Terraform-only changes are validated by the Terraform Plan workflow.
