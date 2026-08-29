@@ -37,6 +37,33 @@ public sealed class HttpWatchlistProviderTests
     }
 
     [Fact]
+    public async Task Supports_named_provider_configuration_section()
+    {
+        var handler = new RecordingHandler(_ => Json("{\"decision\":\"Clear\",\"matchReference\":null,\"errorMessage\":null}"));
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Watchlist:Providers:ProviderA:Name"] = "provider-a",
+                ["Watchlist:Providers:ProviderA:BaseUrl"] = "https://provider-a.example.test",
+                ["Watchlist:Providers:ProviderA:Endpoint"] = "/screen",
+                ["Watchlist:Providers:ProviderA:ApiKey"] = "provider-a-key"
+            })
+            .Build();
+
+        var provider = new HttpWatchlistProvider(
+            new TestHttpClientFactory(handler),
+            configuration,
+            "Watchlist:Providers:ProviderA");
+
+        var result = await provider.CheckAsync(CreatePassport(), CancellationToken.None);
+
+        Assert.Equal("provider-a", provider.Name);
+        Assert.Equal(WatchlistDecision.Clear, result.Decision);
+        Assert.Equal("https://provider-a.example.test/screen", handler.Requests.Single().RequestUri?.ToString());
+        Assert.Equal("provider-a-key", Assert.Single(handler.Requests.Single().Headers.GetValues("X-API-Key")));
+    }
+
+    [Fact]
     public async Task Maps_potential_match_and_match_reference()
     {
         var handler = new RecordingHandler(_ => Json("{\"decision\":\"PotentialMatch\",\"matchReference\":\"CASE-42\",\"errorMessage\":null}"));
