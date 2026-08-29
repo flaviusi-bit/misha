@@ -47,6 +47,7 @@ public static class OpenTelemetryServiceCollectionExtensions
             }
 
             metrics.AddRuntimeInstrumentation();
+            metrics.AddMeter("Misha.Watchlist");
 
             if (!string.IsNullOrWhiteSpace(otlpEndpoint))
             {

@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -18,6 +20,10 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
 {
     private const string ClientName = "watchlist";
     private static readonly ConcurrentDictionary<string, ResiliencePipeline<HttpResponseMessage>> Pipelines = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Meter Meter = new("Misha.Watchlist", "1.0.0");
+    private static readonly Counter<long> Requests = Meter.CreateCounter<long>("misha.watchlist.requests", unit: "{request}");
+    private static readonly Counter<long> Failures = Meter.CreateCounter<long>("misha.watchlist.failures", unit: "{failure}");
+    private static readonly Histogram<double> Duration = Meter.CreateHistogram<double>("misha.watchlist.duration", unit: "ms");
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
@@ -50,72 +56,89 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
         PassportDocument passport,
         CancellationToken cancellationToken)
     {
-        var baseUrl = Get("BaseUrl")?.Trim();
-        var endpoint = Get("Endpoint")?.Trim() ?? "/screen";
-        var apiKey = Get("ApiKey")?.Trim();
-
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttps)
-            return Error("Watchlist provider is not configured with an HTTPS BaseUrl.");
-
-        if (!Uri.TryCreate(endpoint, UriKind.Relative, out var relativeEndpoint))
-            return Error("Watchlist provider Endpoint must be a relative path.");
-
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return Error("Watchlist provider API key is not configured.");
+        var stopwatch = Stopwatch.StartNew();
 
         try
         {
-            var client = _httpClientFactory.CreateClient(ClientName);
-            using var response = await _resiliencePipeline.ExecuteAsync(
-                async ct =>
-                {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, relativeEndpoint))
+            var baseUrl = Get("BaseUrl")?.Trim();
+            var endpoint = Get("Endpoint")?.Trim() ?? "/screen";
+            var apiKey = Get("ApiKey")?.Trim();
+
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttps)
+                return Error("Watchlist provider is not configured with an HTTPS BaseUrl.");
+
+            if (!Uri.TryCreate(endpoint, UriKind.Relative, out var relativeEndpoint))
+                return Error("Watchlist provider Endpoint must be a relative path.");
+
+            if (string.IsNullOrWhiteSpace(apiKey))
+                return Error("Watchlist provider API key is not configured.");
+
+            try
+            {
+                var client = _httpClientFactory.CreateClient(ClientName);
+                Requests.Add(1, new KeyValuePair<string, object?>("provider", Name));
+
+                using var response = await _resiliencePipeline.ExecuteAsync(
+                    async ct =>
                     {
-                        Content = JsonContent.Create(new WatchlistRequest(
-                            passport.DocumentNumber,
-                            passport.IssuingCountry,
-                            passport.Surname,
-                            passport.GivenNames,
-                            passport.DateOfBirth,
-                            passport.Nationality,
-                            passport.ExpiryDate))
-                    };
-                    request.Headers.Add("X-API-Key", apiKey);
-                    return await client.SendAsync(request, ct);
-                }, cancellationToken);
+                        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, relativeEndpoint))
+                        {
+                            Content = JsonContent.Create(new WatchlistRequest(
+                                passport.DocumentNumber,
+                                passport.IssuingCountry,
+                                passport.Surname,
+                                passport.GivenNames,
+                                passport.DateOfBirth,
+                                passport.Nationality,
+                                passport.ExpiryDate))
+                        };
+                        request.Headers.Add("X-API-Key", apiKey);
+                        return await client.SendAsync(request, ct);
+                    }, cancellationToken);
 
-            if (!response.IsSuccessStatusCode)
-                return Error($"Watchlist provider returned HTTP {(int)response.StatusCode}.");
+                if (!response.IsSuccessStatusCode)
+                    return Error($"Watchlist provider returned HTTP {(int)response.StatusCode}.");
 
-            var result = await response.Content.ReadFromJsonAsync<WatchlistResponse>(cancellationToken);
-            if (result is null)
-                return Error("Watchlist provider returned an empty response.");
+                var result = await response.Content.ReadFromJsonAsync<WatchlistResponse>(cancellationToken);
+                if (result is null)
+                    return Error("Watchlist provider returned an empty response.");
 
-            if (!Enum.TryParse<WatchlistDecision>(result.Decision, ignoreCase: true, out var decision) ||
-                decision is WatchlistDecision.NotChecked or WatchlistDecision.Error)
-                return Error("Watchlist provider returned an invalid decision.");
+                if (!Enum.TryParse<WatchlistDecision>(result.Decision, ignoreCase: true, out var decision) ||
+                    decision is WatchlistDecision.NotChecked or WatchlistDecision.Error)
+                    return Error("Watchlist provider returned an invalid decision.");
 
-            return new WatchlistProviderResult(decision, result.MatchReference, result.ErrorMessage);
+                return new WatchlistProviderResult(decision, result.MatchReference, result.ErrorMessage);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Error("Watchlist provider request timed out.");
+            }
+            catch (BrokenCircuitException)
+            {
+                return Error("Watchlist provider circuit is open.");
+            }
+            catch (HttpRequestException ex)
+            {
+                return Error($"Watchlist provider request failed: {ex.Message}");
+            }
+            catch (JsonException ex)
+            {
+                return Error($"Watchlist provider returned invalid JSON: {ex.Message}");
+            }
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        finally
         {
-            return Error("Watchlist provider request timed out.");
-        }
-        catch (BrokenCircuitException)
-        {
-            return Error("Watchlist provider circuit is open.");
-        }
-        catch (HttpRequestException ex)
-        {
-            return Error($"Watchlist provider request failed: {ex.Message}");
-        }
-        catch (JsonException ex)
-        {
-            return Error($"Watchlist provider returned invalid JSON: {ex.Message}");
+            Duration.Record(stopwatch.Elapsed.TotalMilliseconds, new KeyValuePair<string, object?>("provider", Name));
         }
     }
 
     private string? Get(string key) => _configuration[$"{_configurationSection}:{key}"];
+
+    private WatchlistProviderResult Error(string message)
+    {
+        Failures.Add(1, new KeyValuePair<string, object?>("provider", Name));
+        return new WatchlistProviderResult(WatchlistDecision.Error, ErrorMessage: message);
+    }
 
     private static ResiliencePipeline<HttpResponseMessage> BuildResiliencePipeline() =>
         new ResiliencePipelineBuilder<HttpResponseMessage>()
@@ -153,9 +176,6 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
         response.StatusCode == HttpStatusCode.RequestTimeout ||
         response.StatusCode == HttpStatusCode.TooManyRequests ||
         (int)response.StatusCode >= 500;
-
-    private static WatchlistProviderResult Error(string message) =>
-        new(WatchlistDecision.Error, ErrorMessage: message);
 
     private sealed record WatchlistRequest(
         string DocumentNumber,
