@@ -6,8 +6,8 @@ resource "aws_iam_policy" "operational_alerting" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = [
+        Effect   = "Allow"
+        Action   = [
           "sns:CreateTopic",
           "sns:DeleteTopic",
           "sns:GetTopicAttributes",
@@ -22,8 +22,8 @@ resource "aws_iam_policy" "operational_alerting" {
         Resource = "arn:aws:sns:${var.aws_region}:576984879588:${local.name}-*"
       },
       {
-        Effect = "Allow"
-        Action = [
+        Effect   = "Allow"
+        Action   = [
           "events:PutRule",
           "events:DeleteRule",
           "events:DescribeRule",
