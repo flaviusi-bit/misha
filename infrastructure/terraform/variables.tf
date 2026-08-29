@@ -79,7 +79,7 @@ variable "container_image" {
 
 variable "worker_container_image" {
   type        = string
-  description = "ECR image URI for the MISHA worker."
+  description = "ECR image URI for the MISHA worker task."
   default     = ""
 }
 
@@ -123,4 +123,10 @@ variable "cognito_api_identifier" {
   type        = string
   description = "URL-form resource identifier used to bind Cognito access tokens to the MISHA API."
   default     = "https://misha-api"
+}
+
+variable "operational_alert_email" {
+  type        = string
+  description = "Optional email endpoint for production CloudWatch alarm notifications. The SNS subscription requires email confirmation."
+  default     = ""
 }
