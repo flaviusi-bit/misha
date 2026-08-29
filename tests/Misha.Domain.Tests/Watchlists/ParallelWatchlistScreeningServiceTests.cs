@@ -46,9 +46,12 @@ public sealed class ParallelWatchlistScreeningServiceTests
         var result = await screeningTask;
 
         Assert.Equal(WatchlistDecision.PotentialMatch, result.Decision);
+        Assert.True(result.HasConflictingResults);
         Assert.Equal(2, result.Providers.Count);
         Assert.Equal(2, checks.Added.Count);
         Assert.All(checks.Added, check => Assert.NotEqual(WatchlistDecision.NotChecked, check.Decision));
+        Assert.All(result.Providers, provider => Assert.False(provider.TimedOut));
+        Assert.All(result.Providers, provider => Assert.True(provider.Duration >= TimeSpan.Zero));
     }
 
     [Fact]
@@ -60,6 +63,7 @@ public sealed class ParallelWatchlistScreeningServiceTests
             new("confirmed", WatchlistDecision.ConfirmedMatch));
 
         Assert.Equal(WatchlistDecision.ConfirmedMatch, result.Decision);
+        Assert.True(result.HasConflictingResults);
     }
 
     [Fact]
@@ -70,6 +74,18 @@ public sealed class ParallelWatchlistScreeningServiceTests
             new("potential", WatchlistDecision.PotentialMatch));
 
         Assert.Equal(WatchlistDecision.PotentialMatch, result.Decision);
+        Assert.True(result.HasConflictingResults);
+    }
+
+    [Fact]
+    public async Task Matching_provider_results_are_not_marked_as_conflicting()
+    {
+        var result = await RunDecisionsAsync(
+            new("provider-a", WatchlistDecision.Clear),
+            new("provider-b", WatchlistDecision.Clear));
+
+        Assert.Equal(WatchlistDecision.Clear, result.Decision);
+        Assert.False(result.HasConflictingResults);
     }
 
     [Fact]
@@ -80,6 +96,7 @@ public sealed class ParallelWatchlistScreeningServiceTests
             new("failed", WatchlistDecision.Error));
 
         Assert.Equal(WatchlistDecision.Error, result.Decision);
+        Assert.False(result.HasConflictingResults);
     }
 
     [Fact]
@@ -93,6 +110,27 @@ public sealed class ParallelWatchlistScreeningServiceTests
         var broken = Assert.Single(result.Providers, x => x.Provider == "broken");
         Assert.Equal(WatchlistDecision.Error, broken.Check.Decision);
         Assert.Equal("provider unavailable", broken.Check.ErrorMessage);
+        Assert.False(broken.TimedOut);
+    }
+
+    [Fact]
+    public async Task Slow_provider_isolated_as_timeout_and_does_not_block_other_provider()
+    {
+        var result = await RunProvidersAsync(
+            new DelegateProvider("healthy", (_, _) => Task.FromResult(new WatchlistProviderResult(WatchlistDecision.Clear))),
+            new DelegateProvider("slow", async (_, ct) =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), ct);
+                return new WatchlistProviderResult(WatchlistDecision.Clear);
+            }));
+
+        Assert.Equal(WatchlistDecision.Error, result.Decision);
+        var slow = Assert.Single(result.Providers, x => x.Provider == "slow");
+        Assert.Equal(WatchlistDecision.Error, slow.Check.Decision);
+        Assert.True(slow.TimedOut);
+        Assert.Contains("timed out", slow.Check.ErrorMessage!, StringComparison.OrdinalIgnoreCase);
+        var healthy = Assert.Single(result.Providers, x => x.Provider == "healthy");
+        Assert.Equal(WatchlistDecision.Clear, healthy.Check.Decision);
     }
 
     private static Task<ParallelWatchlistScreeningResult> RunDecisionsAsync(params (string Name, WatchlistDecision Decision)[] definitions) =>
