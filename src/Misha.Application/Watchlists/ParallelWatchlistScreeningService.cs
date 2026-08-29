@@ -9,6 +9,8 @@ public sealed class ParallelWatchlistScreeningService(
     IWatchlistCheckRepository checks,
     IEnumerable<IWatchlistProvider> providers)
 {
+    private static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(10);
+
     private readonly IReadOnlyList<IWatchlistProvider> _providers = providers
         .GroupBy(provider => provider.Name, StringComparer.OrdinalIgnoreCase)
         .Select(group => group.First())
@@ -32,8 +34,12 @@ public sealed class ParallelWatchlistScreeningService(
 
         await checks.SaveChangesAsync(cancellationToken);
 
-        var decision = Aggregate(results.Select(x => x.Check.Decision));
-        return new ParallelWatchlistScreeningResult(applicationId, decision, results);
+        var aggregation = Aggregate(results.Select(x => x.Check.Decision));
+        return new ParallelWatchlistScreeningResult(
+            applicationId,
+            aggregation.Decision,
+            aggregation.HasConflictingResults,
+            results);
     }
 
     private static async Task<ProviderScreeningResult> ScreenProviderAsync(
@@ -43,39 +49,69 @@ public sealed class ParallelWatchlistScreeningService(
         CancellationToken cancellationToken)
     {
         var check = WatchlistCheck.Create(applicationId, provider.Name);
+        var startedAt = DateTimeOffset.UtcNow;
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(ProviderTimeout);
 
         try
         {
-            var result = await provider.CheckAsync(passport, cancellationToken);
+            var result = await provider.CheckAsync(passport, timeoutCts.Token);
             if (result.Decision is WatchlistDecision.NotChecked or WatchlistDecision.Error)
                 check.Fail(result.ErrorMessage ?? "Watchlist provider returned an invalid result.");
             else
                 check.Complete(result.Decision, result.MatchReference);
+
+            return CreateProviderResult(provider.Name, check, startedAt, timedOut: false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+        {
+            check.Fail($"Watchlist provider timed out after {ProviderTimeout.TotalSeconds:0} seconds.");
+            return CreateProviderResult(provider.Name, check, startedAt, timedOut: true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             check.Fail(ex.Message);
+            return CreateProviderResult(provider.Name, check, startedAt, timedOut: false);
         }
-
-        return new ProviderScreeningResult(provider.Name, check);
     }
 
-    private static WatchlistDecision Aggregate(IEnumerable<WatchlistDecision> decisions)
+    private static ProviderScreeningResult CreateProviderResult(
+        string provider,
+        WatchlistCheck check,
+        DateTimeOffset startedAt,
+        bool timedOut) =>
+        new(provider, check, DateTimeOffset.UtcNow - startedAt, timedOut);
+
+    private static WatchlistAggregation Aggregate(IEnumerable<WatchlistDecision> decisions)
     {
         var values = decisions.ToArray();
+        var hasMatch = values.Any(decision => decision is WatchlistDecision.PotentialMatch or WatchlistDecision.ConfirmedMatch);
+        var hasClear = values.Any(decision => decision == WatchlistDecision.Clear);
+        var hasConflictingResults = hasMatch && hasClear;
+
         if (values.Any(decision => decision == WatchlistDecision.ConfirmedMatch))
-            return WatchlistDecision.ConfirmedMatch;
+            return new(WatchlistDecision.ConfirmedMatch, hasConflictingResults);
         if (values.Any(decision => decision == WatchlistDecision.PotentialMatch))
-            return WatchlistDecision.PotentialMatch;
+            return new(WatchlistDecision.PotentialMatch, hasConflictingResults);
         if (values.Any(decision => decision == WatchlistDecision.Error))
-            return WatchlistDecision.Error;
-        return WatchlistDecision.Clear;
+            return new(WatchlistDecision.Error, false);
+        return new(WatchlistDecision.Clear, false);
     }
 }
 
-public sealed record ProviderScreeningResult(string Provider, WatchlistCheck Check);
+public sealed record ProviderScreeningResult(
+    string Provider,
+    WatchlistCheck Check,
+    TimeSpan Duration,
+    bool TimedOut);
 
 public sealed record ParallelWatchlistScreeningResult(
     Guid ApplicationId,
     WatchlistDecision Decision,
+    bool HasConflictingResults,
     IReadOnlyList<ProviderScreeningResult> Providers);
+
+public sealed record WatchlistAggregation(
+    WatchlistDecision Decision,
+    bool HasConflictingResults);
