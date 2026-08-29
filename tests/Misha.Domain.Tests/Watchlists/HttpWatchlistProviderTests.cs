@@ -20,7 +20,7 @@ public sealed class HttpWatchlistProviderTests
         var result = await provider.CheckAsync(passport, CancellationToken.None);
 
         Assert.Equal(WatchlistDecision.Clear, result.Decision);
-        Assert.Equal(1, handler.Requests.Count);
+        Assert.Single(handler.Requests);
 
         var request = handler.Requests.Single();
         Assert.Equal(HttpMethod.Post, request.Method);
@@ -59,7 +59,7 @@ public sealed class HttpWatchlistProviderTests
 
         Assert.Equal(WatchlistDecision.Error, result.Decision);
         Assert.Equal("Watchlist provider returned HTTP 500.", result.ErrorMessage);
-        Assert.Equal(3, handler.Requests.Count);
+        Assert.Collection(handler.Requests, _ => { }, _ => { }, _ => { });
     }
 
     [Fact]
