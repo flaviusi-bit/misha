@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -16,6 +17,7 @@ namespace Misha.Infrastructure.Watchlists;
 public sealed class HttpWatchlistProvider : IWatchlistProvider
 {
     private const string ClientName = "watchlist";
+    private static readonly ConcurrentDictionary<string, ResiliencePipeline<HttpResponseMessage>> Pipelines = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
@@ -35,7 +37,7 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _configurationSection = configurationSection;
-        _resiliencePipeline = BuildResiliencePipeline();
+        _resiliencePipeline = Pipelines.GetOrAdd(configurationSection, _ => BuildResiliencePipeline());
     }
 
     public string Name => Get("ProviderName")?.Trim() is { Length: > 0 } name
@@ -53,19 +55,13 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
         var apiKey = Get("ApiKey")?.Trim();
 
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttps)
-        {
             return Error("Watchlist provider is not configured with an HTTPS BaseUrl.");
-        }
 
         if (!Uri.TryCreate(endpoint, UriKind.Relative, out var relativeEndpoint))
-        {
             return Error("Watchlist provider Endpoint must be a relative path.");
-        }
 
         if (string.IsNullOrWhiteSpace(apiKey))
-        {
             return Error("Watchlist provider API key is not configured.");
-        }
 
         try
         {
@@ -89,21 +85,15 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
                 }, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
-            {
                 return Error($"Watchlist provider returned HTTP {(int)response.StatusCode}.");
-            }
 
             var result = await response.Content.ReadFromJsonAsync<WatchlistResponse>(cancellationToken);
             if (result is null)
-            {
                 return Error("Watchlist provider returned an empty response.");
-            }
 
             if (!Enum.TryParse<WatchlistDecision>(result.Decision, ignoreCase: true, out var decision) ||
                 decision is WatchlistDecision.NotChecked or WatchlistDecision.Error)
-            {
                 return Error("Watchlist provider returned an invalid decision.");
-            }
 
             return new WatchlistProviderResult(decision, result.MatchReference, result.ErrorMessage);
         }
@@ -127,7 +117,7 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
 
     private string? Get(string key) => _configuration[$"{_configurationSection}:{key}"];
 
-    private ResiliencePipeline<HttpResponseMessage> BuildResiliencePipeline() =>
+    private static ResiliencePipeline<HttpResponseMessage> BuildResiliencePipeline() =>
         new ResiliencePipelineBuilder<HttpResponseMessage>()
             .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
             {
