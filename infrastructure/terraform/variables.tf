@@ -79,7 +79,7 @@ variable "container_image" {
 
 variable "worker_container_image" {
   type        = string
-  description = "ECR image URI for the MISHA worker image."
+  description = "ECR image URI for the MISHA worker task."
   default     = ""
 }
 
