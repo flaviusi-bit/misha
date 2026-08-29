@@ -80,16 +80,6 @@ jobs:
         working-directory: infrastructure/terraform
         run: terraform validate
 
-      - name: Setup Terraform for state bootstrap
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.10.x'
-
-      - name: Setup Terraform for state bootstrap
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.10.x'
-
       - name: Terraform bootstrap init
         working-directory: infrastructure/terraform-bootstrap
         run: terraform init
