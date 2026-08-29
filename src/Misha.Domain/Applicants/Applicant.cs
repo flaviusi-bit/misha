@@ -66,6 +66,21 @@ public sealed class Applicant
         UpdatedAtUtc = DateTimeOffset.UtcNow;
     }
 
+    public void Anonymize()
+    {
+        ExternalReference = $"anonymized:{Id:N}";
+        FirstName = null;
+        LastName = null;
+        DateOfBirth = null;
+        Nationality = null;
+        CountryOfBirth = null;
+        PlaceOfBirth = null;
+        Gender = null;
+        Email = null;
+        PhoneNumber = null;
+        UpdatedAtUtc = DateTimeOffset.UtcNow;
+    }
+
     private static string NormalizeRequired(string value, int maxLength, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(value))
