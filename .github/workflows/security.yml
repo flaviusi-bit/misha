@@ -4,11 +4,33 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Misha.slnx'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - 'NuGet.config'
+      - '.github/workflows/security.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Misha.slnx'
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - 'NuGet.config'
+      - '.github/workflows/security.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   codeql:
