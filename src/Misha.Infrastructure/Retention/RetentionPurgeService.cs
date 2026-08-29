@@ -35,7 +35,9 @@ public sealed class RetentionPurgeService(
         var candidateApplicants = await db.Applicants
             .Where(x => x.CreatedAtUtc < applicantCutoff)
             .Where(x => !db.Applications.Any(a => a.ApplicantId == x.Id &&
-                a.Status is not (ApplicationStatus.Approved or ApplicationStatus.Refused or ApplicationStatus.Cancelled)))
+                a.Status != ApplicationStatus.Approved &&
+                a.Status != ApplicationStatus.Refused &&
+                a.Status != ApplicationStatus.Cancelled))
             .OrderBy(x => x.CreatedAtUtc)
             .Take(policy.BatchSize)
             .ToListAsync(cancellationToken);
