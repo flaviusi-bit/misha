@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Misha.Application.Documents;
 using Misha.Application.Retention;
 using Misha.Domain.Applications;
 using Misha.Infrastructure.Persistence;
-using Misha.Application.Documents;
 
 namespace Misha.Infrastructure.Retention;
 
@@ -16,10 +16,10 @@ public sealed class RetentionPurgeService(
     public async Task<RetentionPurgeResult> PurgeExpiredAsync(CancellationToken cancellationToken)
     {
         var policy = options.Value;
-        Validate(policy);
-
         if (!policy.Enabled)
             return new RetentionPurgeResult(0, 0, 0, policy.DryRun);
+
+        Validate(policy);
 
         var now = DateTimeOffset.UtcNow;
         var documentCutoff = now.AddDays(-policy.DocumentRetentionDays);
