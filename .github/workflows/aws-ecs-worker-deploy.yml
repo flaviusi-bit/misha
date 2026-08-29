@@ -34,7 +34,7 @@ env:
 jobs:
   deploy:
     if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy') ||
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
