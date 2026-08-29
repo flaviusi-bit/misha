@@ -29,11 +29,11 @@ public sealed class HttpWatchlistProviderTests
         Assert.Equal("test-api-key", Assert.Single(apiKeys));
 
         var body = Assert.Single(handler.RequestBodies);
-        Assert.Contains("\"DocumentNumber\":\"AB123456\"", body);
-        Assert.Contains("\"IssuingCountry\":\"ROU\"", body);
-        Assert.Contains("\"Surname\":\"DOE\"", body);
-        Assert.Contains("\"GivenNames\":\"JOHN\"", body);
-        Assert.Contains("\"Nationality\":\"ROU\"", body);
+        Assert.Contains("\"documentNumber\":\"AB123456\"", body);
+        Assert.Contains("\"issuingCountry\":\"ROU\"", body);
+        Assert.Contains("\"surname\":\"DOE\"", body);
+        Assert.Contains("\"givenNames\":\"JOHN\"", body);
+        Assert.Contains("\"nationality\":\"ROU\"", body);
     }
 
     [Fact]
