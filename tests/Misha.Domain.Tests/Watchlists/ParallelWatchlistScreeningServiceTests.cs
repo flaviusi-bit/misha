@@ -54,7 +54,7 @@ public sealed class ParallelWatchlistScreeningServiceTests
     [Fact]
     public async Task Confirmed_match_has_precedence_over_potential_and_clear()
     {
-        var result = await RunAsync(
+        var result = await RunDecisionsAsync(
             new("clear", WatchlistDecision.Clear),
             new("potential", WatchlistDecision.PotentialMatch),
             new("confirmed", WatchlistDecision.ConfirmedMatch));
@@ -65,7 +65,7 @@ public sealed class ParallelWatchlistScreeningServiceTests
     [Fact]
     public async Task Potential_match_has_precedence_over_clear()
     {
-        var result = await RunAsync(
+        var result = await RunDecisionsAsync(
             new("clear", WatchlistDecision.Clear),
             new("potential", WatchlistDecision.PotentialMatch));
 
@@ -75,7 +75,7 @@ public sealed class ParallelWatchlistScreeningServiceTests
     [Fact]
     public async Task Provider_error_never_aggregates_to_clear()
     {
-        var result = await RunAsync(
+        var result = await RunDecisionsAsync(
             new("clear", WatchlistDecision.Clear),
             new("failed", WatchlistDecision.Error));
 
@@ -85,7 +85,7 @@ public sealed class ParallelWatchlistScreeningServiceTests
     [Fact]
     public async Task Provider_exception_isolated_as_error_and_other_provider_completes()
     {
-        var result = await RunAsync(
+        var result = await RunProvidersAsync(
             new DelegateProvider("healthy", (_, _) => Task.FromResult(new WatchlistProviderResult(WatchlistDecision.Clear))),
             new DelegateProvider("broken", (_, _) => throw new InvalidOperationException("provider unavailable")));
 
@@ -95,10 +95,10 @@ public sealed class ParallelWatchlistScreeningServiceTests
         Assert.Equal("provider unavailable", broken.Check.ErrorMessage);
     }
 
-    private static Task<ParallelWatchlistScreeningResult> RunAsync(params (string Name, WatchlistDecision Decision)[] definitions) =>
-        RunAsync(definitions.Select(x => new DelegateProvider(x.Name, (_, _) => Task.FromResult(new WatchlistProviderResult(x.Decision)))).ToArray());
+    private static Task<ParallelWatchlistScreeningResult> RunDecisionsAsync(params (string Name, WatchlistDecision Decision)[] definitions) =>
+        RunProvidersAsync(definitions.Select(x => new DelegateProvider(x.Name, (_, _) => Task.FromResult(new WatchlistProviderResult(x.Decision)))).ToArray());
 
-    private static async Task<ParallelWatchlistScreeningResult> RunAsync(params IWatchlistProvider[] providers)
+    private static async Task<ParallelWatchlistScreeningResult> RunProvidersAsync(params IWatchlistProvider[] providers)
     {
         var passport = CreatePassport();
         var service = new ParallelWatchlistScreeningService(
