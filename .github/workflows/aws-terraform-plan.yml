@@ -1,13 +1,11 @@
 name: AWS Terraform Plan
 
 on:
-  push:
+  pull_request:
     branches: [main]
     paths:
       - 'infrastructure/terraform/**'
       - '.github/workflows/aws-terraform-plan.yml'
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -38,6 +36,10 @@ on:
 permissions:
   contents: read
   id-token: write
+
+concurrency:
+  group: aws-terraform-plan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   terraform-plan:
