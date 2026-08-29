@@ -119,6 +119,31 @@ jobs:
           aws iam attach-role-policy --role-name "$ROLE_NAME" --policy-arn "$POLICY_ARN"
           sleep 15
 
+      - name: Attach operational alerting bootstrap policies
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+        run: |
+          set -euo pipefail
+          ROLE_NAME="misha-${TARGET_ENVIRONMENT}-github-actions-deploy"
+          aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+          aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn "arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess"
+          sleep 15
+
+      - name: Refresh AWS credentials after IAM bootstrap
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+          role-session-name: GitHubActionsTerraformApplyRefreshed
+
+      - name: Verify refreshed AWS identity
+        working-directory: .
+        run: aws sts get-caller-identity
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
