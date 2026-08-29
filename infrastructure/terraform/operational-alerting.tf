@@ -79,8 +79,7 @@ resource "aws_sns_topic_subscription" "operational_alerts_email" {
 resource "aws_cloudwatch_event_rule" "operational_alarm_state_change" {
   name        = "${local.name}-operational-alarm-state-change"
   description = "Route CloudWatch alarm state changes to the operational alert topic."
-
-  depends_on = [aws_iam_role_policy_attachment.github_actions_operational_alerting]
+  depends_on  = [aws_iam_role_policy_attachment.github_actions_operational_alerting]
 
   event_pattern = jsonencode({
     source      = ["aws.cloudwatch"]
