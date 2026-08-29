@@ -27,6 +27,11 @@ on:
         required: false
         default: ""
         type: string
+      operational_alert_email:
+        description: "Email address for operational alarm notifications"
+        required: false
+        default: ""
+        type: string
       confirm:
         description: "Type APPLY to authorize the Terraform apply"
         required: true
@@ -194,12 +199,14 @@ jobs:
           DOMAIN_NAME: ${{ inputs.domain_name || '' }}
           ROUTE53_ZONE_ID: ${{ inputs.route53_zone_id || '' }}
           FINAL_SNAPSHOT_IDENTIFIER: ${{ inputs.final_snapshot_identifier || '' }}
+          OPERATIONAL_ALERT_EMAIL: ${{ inputs.operational_alert_email || '' }}
         run: |
           terraform plan -input=false \
             -var="environment=${TARGET_ENVIRONMENT}" \
             -var="domain_name=${DOMAIN_NAME}" \
             -var="route53_zone_id=${ROUTE53_ZONE_ID}" \
             -var="final_snapshot_identifier=${FINAL_SNAPSHOT_IDENTIFIER}" \
+            -var="operational_alert_email=${OPERATIONAL_ALERT_EMAIL}" \
             -out=tfplan
 
       - name: Terraform apply approved plan
@@ -233,6 +240,7 @@ jobs:
           DOMAIN_NAME: ${{ inputs.domain_name || '' }}
           ROUTE53_ZONE_ID: ${{ inputs.route53_zone_id || '' }}
           FINAL_SNAPSHOT_IDENTIFIER: ${{ inputs.final_snapshot_identifier || '' }}
+          OPERATIONAL_ALERT_EMAIL: ${{ inputs.operational_alert_email || '' }}
         run: |
           set +e
           terraform plan -input=false \
@@ -240,6 +248,7 @@ jobs:
             -var="domain_name=${DOMAIN_NAME}" \
             -var="route53_zone_id=${ROUTE53_ZONE_ID}" \
             -var="final_snapshot_identifier=${FINAL_SNAPSHOT_IDENTIFIER}" \
+            -var="operational_alert_email=${OPERATIONAL_ALERT_EMAIL}" \
             -detailed-exitcode
           rc=$?
           if [ "$rc" -eq 0 ]; then exit 0; fi
