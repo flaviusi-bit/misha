@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -5,6 +6,10 @@ using Microsoft.Extensions.Configuration;
 using Misha.Application.Watchlists;
 using Misha.Domain.Documents;
 using Misha.Domain.Watchlists;
+using Polly;
+using Polly.CircuitBreaker;
+using Polly.Retry;
+using Polly.Timeout;
 
 namespace Misha.Infrastructure.Watchlists;
 
@@ -13,6 +18,38 @@ public sealed class HttpWatchlistProvider(
     IConfiguration configuration) : IWatchlistProvider
 {
     private const string ClientName = "watchlist";
+
+    private static readonly ResiliencePipeline<HttpResponseMessage> ResiliencePipeline =
+        new ResiliencePipelineBuilder<HttpResponseMessage>()
+            .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+            {
+                MaxRetryAttempts = 2,
+                Delay = TimeSpan.FromMilliseconds(250),
+                BackoffType = DelayBackoffType.Exponential,
+                UseJitter = true,
+                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                    .Handle<HttpRequestException>()
+                    .Handle<TimeoutRejectedException>()
+                    .HandleResult(IsTransientResponse),
+                OnRetry = static args =>
+                {
+                    args.Outcome.Result?.Dispose();
+                    return default;
+                }
+            })
+            .AddCircuitBreaker(new CircuitBreakerStrategyOptions<HttpResponseMessage>
+            {
+                FailureRatio = 0.5,
+                MinimumThroughput = 5,
+                SamplingDuration = TimeSpan.FromSeconds(30),
+                BreakDuration = TimeSpan.FromSeconds(30),
+                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                    .Handle<HttpRequestException>()
+                    .Handle<TimeoutRejectedException>()
+                    .HandleResult(IsTransientResponse)
+            })
+            .AddTimeout(TimeSpan.FromSeconds(10))
+            .Build();
 
     public string Name => configuration["Watchlist:ProviderName"]?.Trim() is { Length: > 0 } name
         ? name
@@ -41,23 +78,26 @@ public sealed class HttpWatchlistProvider(
             return Error("Watchlist provider API key is not configured.");
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, relativeEndpoint))
-        {
-            Content = JsonContent.Create(new WatchlistRequest(
-                passport.DocumentNumber,
-                passport.IssuingCountry,
-                passport.Surname,
-                passport.GivenNames,
-                passport.DateOfBirth,
-                passport.Nationality,
-                passport.ExpiryDate))
-        };
-        request.Headers.Add("X-API-Key", apiKey);
-
         try
         {
             var client = httpClientFactory.CreateClient(ClientName);
-            using var response = await client.SendAsync(request, cancellationToken);
+            using var response = await ResiliencePipeline.ExecuteAsync(
+                async ct =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, relativeEndpoint))
+                    {
+                        Content = JsonContent.Create(new WatchlistRequest(
+                            passport.DocumentNumber,
+                            passport.IssuingCountry,
+                            passport.Surname,
+                            passport.GivenNames,
+                            passport.DateOfBirth,
+                            passport.Nationality,
+                            passport.ExpiryDate))
+                    };
+                    request.Headers.Add("X-API-Key", apiKey);
+                    return await client.SendAsync(request, ct);
+                }, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -82,6 +122,10 @@ public sealed class HttpWatchlistProvider(
         {
             return Error("Watchlist provider request timed out.");
         }
+        catch (BrokenCircuitException)
+        {
+            return Error("Watchlist provider circuit is open.");
+        }
         catch (HttpRequestException ex)
         {
             return Error($"Watchlist provider request failed: {ex.Message}");
@@ -91,6 +135,11 @@ public sealed class HttpWatchlistProvider(
             return Error($"Watchlist provider returned invalid JSON: {ex.Message}");
         }
     }
+
+    private static bool IsTransientResponse(HttpResponseMessage response) =>
+        response.StatusCode == HttpStatusCode.RequestTimeout ||
+        response.StatusCode == HttpStatusCode.TooManyRequests ||
+        (int)response.StatusCode >= 500;
 
     private static WatchlistProviderResult Error(string message) =>
         new(WatchlistDecision.Error, ErrorMessage: message);
