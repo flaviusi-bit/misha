@@ -84,24 +84,26 @@ public sealed class HttpPassportVerificationProvider(
                 ErrorMessage: "Passport verification provider API key is not configured.");
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, endpoint))
-        {
-            Content = JsonContent.Create(new PassportVerificationRequest(
-                passport.DocumentNumber,
-                passport.IssuingCountry,
-                passport.Surname,
-                passport.GivenNames,
-                passport.DateOfBirth,
-                passport.Nationality,
-                passport.ExpiryDate))
-        };
-        request.Headers.Add("X-API-Key", apiKey);
-
         try
         {
             var client = httpClientFactory.CreateClient(ClientName);
             using var response = await ResiliencePipeline.ExecuteAsync(
-                async ct => await client.SendAsync(request, ct), cancellationToken);
+                async ct =>
+                {
+                    using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, endpoint))
+                    {
+                        Content = JsonContent.Create(new PassportVerificationRequest(
+                            passport.DocumentNumber,
+                            passport.IssuingCountry,
+                            passport.Surname,
+                            passport.GivenNames,
+                            passport.DateOfBirth,
+                            passport.Nationality,
+                            passport.ExpiryDate))
+                    };
+                    request.Headers.Add("X-API-Key", apiKey);
+                    return await client.SendAsync(request, ct);
+                }, cancellationToken);
 
             if (!response.IsSuccessStatusCode)
             {
