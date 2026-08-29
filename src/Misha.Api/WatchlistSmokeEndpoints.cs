@@ -69,5 +69,40 @@ public static class WatchlistSmokeEndpoints
                 cases = new[] { "Clear", "PotentialMatch", "ConfirmedMatch" }
             });
         });
+
+        app.MapPost("/applications/{id:guid}/watchlist/screen/parallel", async (
+            Guid id,
+            IPassportRepository passports,
+            IWatchlistCheckRepository checks,
+            IEnumerable<IWatchlistProvider> providers,
+            CancellationToken ct) =>
+        {
+            var service = new ParallelWatchlistScreeningService(passports, checks, providers);
+            var result = await service.ScreenAsync(id, ct);
+
+            return Results.Ok(new ParallelWatchlistResponse(
+                result.ApplicationId,
+                result.Decision.ToString(),
+                result.Providers.Select(provider => new ParallelWatchlistProviderResponse(
+                    provider.Provider,
+                    provider.Check.Id,
+                    provider.Check.Decision.ToString(),
+                    provider.Check.MatchReference,
+                    provider.Check.ErrorMessage,
+                    provider.Check.CheckedAtUtc)).ToArray()));
+        }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
     }
 }
+
+public sealed record ParallelWatchlistResponse(
+    Guid ApplicationId,
+    string Decision,
+    IReadOnlyList<ParallelWatchlistProviderResponse> Providers);
+
+public sealed record ParallelWatchlistProviderResponse(
+    string Provider,
+    Guid CheckId,
+    string Decision,
+    string? MatchReference,
+    string? ErrorMessage,
+    DateTimeOffset? CheckedAtUtc);
