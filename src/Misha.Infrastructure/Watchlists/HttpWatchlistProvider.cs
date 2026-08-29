@@ -13,55 +13,44 @@ using Polly.Timeout;
 
 namespace Misha.Infrastructure.Watchlists;
 
-public sealed class HttpWatchlistProvider(
-    IHttpClientFactory httpClientFactory,
-    IConfiguration configuration) : IWatchlistProvider
+public sealed class HttpWatchlistProvider : IWatchlistProvider
 {
     private const string ClientName = "watchlist";
 
-    private static readonly ResiliencePipeline<HttpResponseMessage> ResiliencePipeline =
-        new ResiliencePipelineBuilder<HttpResponseMessage>()
-            .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
-            {
-                MaxRetryAttempts = 2,
-                Delay = TimeSpan.FromMilliseconds(250),
-                BackoffType = DelayBackoffType.Exponential,
-                UseJitter = true,
-                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                    .Handle<HttpRequestException>()
-                    .Handle<TimeoutRejectedException>()
-                    .HandleResult(IsTransientResponse),
-                OnRetry = static args =>
-                {
-                    args.Outcome.Result?.Dispose();
-                    return default;
-                }
-            })
-            .AddCircuitBreaker(new CircuitBreakerStrategyOptions<HttpResponseMessage>
-            {
-                FailureRatio = 0.5,
-                MinimumThroughput = 5,
-                SamplingDuration = TimeSpan.FromSeconds(30),
-                BreakDuration = TimeSpan.FromSeconds(30),
-                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                    .Handle<HttpRequestException>()
-                    .Handle<TimeoutRejectedException>()
-                    .HandleResult(IsTransientResponse)
-            })
-            .AddTimeout(TimeSpan.FromSeconds(10))
-            .Build();
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
+    private readonly string _configurationSection;
+    private readonly ResiliencePipeline<HttpResponseMessage> _resiliencePipeline;
 
-    public string Name => configuration["Watchlist:ProviderName"]?.Trim() is { Length: > 0 } name
+    public HttpWatchlistProvider(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        : this(httpClientFactory, configuration, "Watchlist")
+    {
+    }
+
+    public HttpWatchlistProvider(
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        string configurationSection)
+    {
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
+        _configurationSection = configurationSection;
+        _resiliencePipeline = BuildResiliencePipeline();
+    }
+
+    public string Name => Get("ProviderName")?.Trim() is { Length: > 0 } name
         ? name
-        : "configured-http";
+        : Get("Name")?.Trim() is { Length: > 0 } configuredName
+            ? configuredName
+            : "configured-http";
 
     public async Task<WatchlistProviderResult> CheckAsync(
         PassportDocument passport,
         CancellationToken cancellationToken)
     {
-        var baseUrl = configuration["Watchlist:BaseUrl"]?.Trim();
-        var endpoint = configuration["Watchlist:Endpoint"]?.Trim() ?? "/screen";
-        var apiKey = configuration["Watchlist:ApiKey"]?.Trim();
+        var baseUrl = Get("BaseUrl")?.Trim();
+        var endpoint = Get("Endpoint")?.Trim() ?? "/screen";
+        var apiKey = Get("ApiKey")?.Trim();
 
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) || baseUri.Scheme != Uri.UriSchemeHttps)
         {
@@ -80,8 +69,8 @@ public sealed class HttpWatchlistProvider(
 
         try
         {
-            var client = httpClientFactory.CreateClient(ClientName);
-            using var response = await ResiliencePipeline.ExecuteAsync(
+            var client = _httpClientFactory.CreateClient(ClientName);
+            using var response = await _resiliencePipeline.ExecuteAsync(
                 async ct =>
                 {
                     using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, relativeEndpoint))
@@ -135,6 +124,40 @@ public sealed class HttpWatchlistProvider(
             return Error($"Watchlist provider returned invalid JSON: {ex.Message}");
         }
     }
+
+    private string? Get(string key) => _configuration[$"{_configurationSection}:{key}"];
+
+    private ResiliencePipeline<HttpResponseMessage> BuildResiliencePipeline() =>
+        new ResiliencePipelineBuilder<HttpResponseMessage>()
+            .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
+            {
+                MaxRetryAttempts = 2,
+                Delay = TimeSpan.FromMilliseconds(250),
+                BackoffType = DelayBackoffType.Exponential,
+                UseJitter = true,
+                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                    .Handle<HttpRequestException>()
+                    .Handle<TimeoutRejectedException>()
+                    .HandleResult(IsTransientResponse),
+                OnRetry = static args =>
+                {
+                    args.Outcome.Result?.Dispose();
+                    return default;
+                }
+            })
+            .AddCircuitBreaker(new CircuitBreakerStrategyOptions<HttpResponseMessage>
+            {
+                FailureRatio = 0.5,
+                MinimumThroughput = 5,
+                SamplingDuration = TimeSpan.FromSeconds(30),
+                BreakDuration = TimeSpan.FromSeconds(30),
+                ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                    .Handle<HttpRequestException>()
+                    .Handle<TimeoutRejectedException>()
+                    .HandleResult(IsTransientResponse)
+            })
+            .AddTimeout(TimeSpan.FromSeconds(10))
+            .Build();
 
     private static bool IsTransientResponse(HttpResponseMessage response) =>
         response.StatusCode == HttpStatusCode.RequestTimeout ||
