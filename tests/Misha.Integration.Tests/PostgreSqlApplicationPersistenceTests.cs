@@ -156,7 +156,7 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         }
         Assert.Equal(firstId, secondId);
         await using var verificationDb = new MishaDbContext(options);
-        Assert.Equal(1, await verificationDb.Applications.CountAsync(x => x.IdempotencyKey == "request-123");
+        Assert.Equal(1, await verificationDb.Applications.CountAsync(x => x.IdempotencyKey == "request-123"));
         Assert.Empty(await verificationDb.OutboxMessages.Where(x => x.AggregateId == firstId).ToListAsync());
     }
 
