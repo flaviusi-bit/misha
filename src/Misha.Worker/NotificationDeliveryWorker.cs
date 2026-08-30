@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using Misha.Application.Notifications;
+using Misha.Infrastructure.Notifications;
 
 namespace Misha.Worker;
 
