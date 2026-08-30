@@ -15,6 +15,7 @@ var builder = new HostApplicationBuilder(args);
 
 builder.Services.AddMishaOpenTelemetry(builder.Configuration, "misha-worker", includeAspNetCoreInstrumentation: false);
 builder.Services.Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));
+builder.Services.Configure<NotificationDeliveryOptions>(builder.Configuration.GetSection(NotificationDeliveryOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("Misha");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -58,6 +59,8 @@ builder.Services.AddScoped<IOutboxDispatcher>(sp => new SqsOutboxDispatcher(
     queueUrl,
     sp.GetRequiredService<ILogger<SqsOutboxDispatcher>>()));
 
+builder.Services.AddHttpClient<INotificationDelivery, HttpNotificationDelivery>();
+builder.Services.AddHostedService<NotificationDeliveryWorker>();
 builder.Services.AddScoped<IRetentionPurgeService, RetentionPurgeService>();
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<RetentionWorker>();
