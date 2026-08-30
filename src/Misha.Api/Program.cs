@@ -42,25 +42,8 @@ builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
 builder.Services.AddHttpClient("watchlist", client => client.Timeout = TimeSpan.FromSeconds(10));
 var watchlistProviderSections = builder.Configuration.GetSection("Watchlist:Providers").GetChildren().ToArray();
-if (watchlistProviderSections.Length > 0)
-{
-    foreach (var section in watchlistProviderSections)
-    {
-        builder.Services.AddScoped<IWatchlistProvider>(sp =>
-            new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), builder.Configuration, section.Path));
-    }
-}
-else
-{
-    builder.Services.AddScoped<IWatchlistProvider>(sp =>
-    {
-        var configuration = sp.GetRequiredService<IConfiguration>();
-        var providerName = configuration["Watchlist:ProviderName"]?.Trim();
-        return string.Equals(providerName, "dev-mock", StringComparison.OrdinalIgnoreCase)
-            ? new MockWatchlistProvider()
-            : new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), configuration);
-    });
-}
+if (watchlistProviderSections.Length > 0) foreach (var section in watchlistProviderSections) builder.Services.AddScoped<IWatchlistProvider>(sp => new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), builder.Configuration, section.Path));
+else builder.Services.AddScoped<IWatchlistProvider>(sp => string.Equals(sp.GetRequiredService<IConfiguration>()["Watchlist:ProviderName"]?.Trim(), "dev-mock", StringComparison.OrdinalIgnoreCase) ? new MockWatchlistProvider() : new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), sp.GetRequiredService<IConfiguration>()));
 builder.Services.AddScoped<IPassportVerificationProvider, HttpPassportVerificationProvider>();
 builder.Services.AddHttpClient("passport-verification", client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddSingleton<IFastLaneVerificationCache, InMemoryFastLaneVerificationCache>();
@@ -75,11 +58,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 AuthorizationPolicies.Add(builder.Services, cognitoApiIdentifier);
 var app = builder.Build();
 await using (var scope = app.Services.CreateAsyncScope()) { var db = scope.ServiceProvider.GetRequiredService<MishaDbContext>(); await db.Database.MigrateAsync(); }
-app.UseSecurityHeaders(); app.UseAuthentication(); app.UseAuthorization(); app.UseRateLimiter();
+app.UseSecurityHeaders(); app.UseAuthentication(); app.UseAuthorization(); app.UseMiddleware<TenantIsolationMiddleware>(); app.UseRateLimiter();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = check => check.Tags.Contains("live") }).AllowAnonymous();
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
 WatchlistSmokeEndpoints.Map(app); app.MapPaymentEndpoints(); app.MapEtaEndpoints(); DecisionEndpoints.Map(app); ManualReviewEndpoints.Map(app); NotificationEndpoints.Map(app); ApplicantEndpoints.Map(app);
-app.MapPost("/applications", async (CreateApplicationRequest request, HttpRequest httpRequest, ApplicationService service, CancellationToken ct) => { try { var idempotencyKey = httpRequest.Headers["Idempotency-Key"].FirstOrDefault(); var id = await service.CreateAsync(request.ApplicantReference, idempotencyKey, ct); return Results.Created($"/applications/{id}", new { id }); } catch (InvalidOperationException ex) when (ex.Message.StartsWith("The idempotency key", StringComparison.Ordinal)) { return Results.Conflict(new { error = ex.Message }); } }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapPost("/applications", async (CreateApplicationRequest request, HttpRequest httpRequest, HttpContext httpContext, ApplicationService service, CancellationToken ct) => { try { var idempotencyKey = httpRequest.Headers["Idempotency-Key"].FirstOrDefault(); var tenantId = httpContext.User.FindFirst("client_id")?.Value; if (string.IsNullOrWhiteSpace(tenantId)) return Results.Forbid(); var id = await service.CreateAsync(request.ApplicantReference, idempotencyKey, tenantId, ct); return Results.Created($"/applications/{id}", new { id }); } catch (InvalidOperationException ex) when (ex.Message.StartsWith("The idempotency key", StringComparison.Ordinal)) { return Results.Conflict(new { error = ex.Message }); } }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service, CancellationToken ct) => { var application = await service.GetAsync(id, ct); return application is null ? Results.NotFound() : Results.Ok(new ApplicationResponse(application.Id, application.ApplicantReference, application.Status.ToString(), application.CreatedAtUtc, application.SubmittedAtUtc, application.ProcessingStartedAtUtc, application.DecidedAtUtc, application.CancelledAtUtc, application.RefusalReason)); }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 app.MapGet("/applications/{id:guid}/lifecycle", async (Guid id, ApplicationService service, CancellationToken ct) => { var application = await service.GetAsync(id, ct); return application is null ? Results.NotFound() : Results.Ok(await service.GetLifecycleAsync(id, ct)); }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 app.MapPost("/applications/{id:guid}/submit", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.SubmitAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
@@ -87,7 +70,7 @@ app.MapPost("/applications/{id:guid}/process", async (Guid id, HttpContext httpC
 app.MapPost("/applications/{id:guid}/approve", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.ApproveAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 app.MapPost("/applications/{id:guid}/refuse", async (Guid id, RefuseApplicationRequest request, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.RefuseAsync(id, request.Reason, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 app.MapPost("/applications/{id:guid}/cancel", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.CancelAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
-app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) => { var documents = await service.GetAsync(id, ct); return Results.Ok(documents.Select(ToDocumentResponse)); }).RequireAuthorization(AuthorizationPolicies.ApiRead);
+app.MapGet("/applications/{id:guid}/documents", async (Guid id, DocumentService service, CancellationToken ct) => Results.Ok((await service.GetAsync(id, ct)).Select(ToDocumentResponse))).RequireAuthorization(AuthorizationPolicies.ApiRead);
 app.MapPost("/applications/{id:guid}/documents", async (Guid id, DocumentRequest request, DocumentService service, CancellationToken ct) => { try { var document = await service.RegisterAsync(id, request.DocumentType, request.FileName, request.ContentType, request.SizeBytes, request.Sha256, request.StorageKey, ct); return Results.Created($"/applications/{id}/documents", ToDocumentResponse(document)); } catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); } catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); } }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 app.MapDelete("/applications/{id:guid}/documents/{documentId:guid}", async (Guid id, Guid documentId, DocumentService service, CancellationToken ct) => { try { await service.DeleteAsync(id, documentId, ct); return Results.NoContent(); } catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); } }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 app.MapPost("/applications/{id:guid}/documents/upload", async (Guid id, [FromForm] DocumentType documentType, [FromForm] IFormFile file, DocumentService service, CancellationToken ct) => { try { if (file is null) return Results.BadRequest(new { error = "A document file is required." }); var document = await service.UploadAsync(id, documentType, file.FileName, file.ContentType, file.OpenReadStream(), ct); return Results.Created($"/applications/{id}/documents", ToDocumentResponse(document)); } catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); } catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); } }).DisableAntiforgery().RequireAuthorization(AuthorizationPolicies.ApiWrite);
