@@ -44,11 +44,7 @@ builder.Services.AddHttpClient("watchlist", client => client.Timeout = TimeSpan.
 var watchlistProviderSections = builder.Configuration.GetSection("Watchlist:Providers").GetChildren().ToArray();
 if (watchlistProviderSections.Length > 0)
 {
-    foreach (var section in watchlistProviderSections)
-    {
-        builder.Services.AddScoped<IWatchlistProvider>(sp =>
-            new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), builder.Configuration, section.Path));
-    }
+    foreach (var section in watchlistProviderSections) builder.Services.AddScoped<IWatchlistProvider>(sp => new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), builder.Configuration, section.Path));
 }
 else
 {
@@ -56,16 +52,13 @@ else
     {
         var configuration = sp.GetRequiredService<IConfiguration>();
         var providerName = configuration["Watchlist:ProviderName"]?.Trim();
-        return string.Equals(providerName, "dev-mock", StringComparison.OrdinalIgnoreCase)
-            ? new MockWatchlistProvider()
-            : new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), configuration);
+        return string.Equals(providerName, "dev-mock", StringComparison.OrdinalIgnoreCase) ? new MockWatchlistProvider() : new HttpWatchlistProvider(sp.GetRequiredService<IHttpClientFactory>(), configuration);
     });
 }
 builder.Services.AddScoped<IPassportVerificationProvider, HttpPassportVerificationProvider>();
 builder.Services.AddHttpClient("passport-verification", client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddSingleton<IFastLaneVerificationCache, InMemoryFastLaneVerificationCache>();
-builder.Services.AddScoped<FastLaneVerificationService>();
-builder.Services.AddScoped<ApplicationService>(); builder.Services.AddScoped<DocumentService>(); builder.Services.AddScoped<PassportService>(); builder.Services.AddScoped<PassportVerificationService>(); builder.Services.AddScoped<WatchlistService>(); builder.Services.AddSingleton<IPolicyEngine, DefaultPolicyEngine>(); builder.Services.AddScoped<PolicyService>();
+builder.Services.AddScoped<FastLaneVerificationService>(); builder.Services.AddScoped<ApplicationService>(); builder.Services.AddScoped<DocumentService>(); builder.Services.AddScoped<PassportService>(); builder.Services.AddScoped<PassportVerificationService>(); builder.Services.AddScoped<WatchlistService>(); builder.Services.AddSingleton<IPolicyEngine, DefaultPolicyEngine>(); builder.Services.AddScoped<PolicyService>();
 Misha.Api.DecisionServiceRegistration.AddDecisionEngine(builder.Services); PaymentServiceRegistration.AddPaymentServices(builder.Services); EtaServiceRegistration.AddEtaServices(builder.Services, builder.Configuration); NotificationServiceRegistration.AddNotificationServices(builder.Services);
 builder.Services.AddHealthChecks().AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "live" }).AddDbContextCheck<MishaDbContext>("postgres", tags: new[] { "ready" });
 builder.Services.AddRateLimiter(options => { options.RejectionStatusCode = StatusCodes.Status429TooManyRequests; options.AddPolicy("eta-verification", httpContext => RateLimitPartition.GetFixedWindowLimiter(httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true })); });
@@ -75,11 +68,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 AuthorizationPolicies.Add(builder.Services, cognitoApiIdentifier);
 var app = builder.Build();
 await using (var scope = app.Services.CreateAsyncScope()) { var db = scope.ServiceProvider.GetRequiredService<MishaDbContext>(); await db.Database.MigrateAsync(); }
-app.UseSecurityHeaders(); app.UseAuthentication(); app.UseAuthorization(); app.UseRateLimiter();
+app.UseSecurityHeaders(); app.UseAuthentication(); app.UseAuthorization(); app.UseMiddleware<TenantIsolationMiddleware>(); app.UseRateLimiter();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = check => check.Tags.Contains("live") }).AllowAnonymous();
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
 WatchlistSmokeEndpoints.Map(app); app.MapPaymentEndpoints(); app.MapEtaEndpoints(); DecisionEndpoints.Map(app); ManualReviewEndpoints.Map(app); NotificationEndpoints.Map(app); ApplicantEndpoints.Map(app);
-app.MapPost("/applications", async (CreateApplicationRequest request, HttpRequest httpRequest, ApplicationService service, CancellationToken ct) => { try { var idempotencyKey = httpRequest.Headers["Idempotency-Key"].FirstOrDefault(); var id = await service.CreateAsync(request.ApplicantReference, idempotencyKey, ct); return Results.Created($"/applications/{id}", new { id }); } catch (InvalidOperationException ex) when (ex.Message.StartsWith("The idempotency key", StringComparison.Ordinal)) { return Results.Conflict(new { error = ex.Message }); } }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
+app.MapPost("/applications", async (CreateApplicationRequest request, HttpRequest httpRequest, HttpContext httpContext, ApplicationService service, CancellationToken ct) => { try { var idempotencyKey = httpRequest.Headers["Idempotency-Key"].FirstOrDefault(); var tenantId = httpContext.User.FindFirst("client_id")?.Value; if (string.IsNullOrWhiteSpace(tenantId)) return Results.Forbid(); var id = await service.CreateAsync(request.ApplicantReference, idempotencyKey, tenantId, ct); return Results.Created($"/applications/{id}", new { id }); } catch (InvalidOperationException ex) when (ex.Message.StartsWith("The idempotency key", StringComparison.Ordinal)) { return Results.Conflict(new { error = ex.Message }); } }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 app.MapGet("/applications/{id:guid}", async (Guid id, ApplicationService service, CancellationToken ct) => { var application = await service.GetAsync(id, ct); return application is null ? Results.NotFound() : Results.Ok(new ApplicationResponse(application.Id, application.ApplicantReference, application.Status.ToString(), application.CreatedAtUtc, application.SubmittedAtUtc, application.ProcessingStartedAtUtc, application.DecidedAtUtc, application.CancelledAtUtc, application.RefusalReason)); }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 app.MapGet("/applications/{id:guid}/lifecycle", async (Guid id, ApplicationService service, CancellationToken ct) => { var application = await service.GetAsync(id, ct); return application is null ? Results.NotFound() : Results.Ok(await service.GetLifecycleAsync(id, ct)); }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 app.MapPost("/applications/{id:guid}/submit", async (Guid id, HttpContext httpContext, ApplicationService service, CancellationToken ct) => await ExecuteCommand(() => service.SubmitAsync(id, GetActorReference(httpContext), ct))).RequireAuthorization(AuthorizationPolicies.ApiWrite);
