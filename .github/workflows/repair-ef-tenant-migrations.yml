@@ -1,0 +1,64 @@
+name: Repair EF tenant migrations
+
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-ef-tenant-migrations.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Create design-time DbContext factory
+        shell: bash
+        run: |
+          cat > src/Misha.Infrastructure/MishaDbContextDesignTimeFactory.cs <<'EOF'
+          using Microsoft.EntityFrameworkCore;
+          using Microsoft.EntityFrameworkCore.Design;
+
+          namespace Misha.Infrastructure.Persistence;
+
+          public sealed class MishaDbContextDesignTimeFactory : IDesignTimeDbContextFactory<MishaDbContext>
+          {
+              public MishaDbContext CreateDbContext(string[] args)
+              {
+                  var options = new DbContextOptionsBuilder<MishaDbContext>()
+                      .UseNpgsql("Host=localhost;Database=misha_design;Username=misha;Password=misha")
+                      .Options;
+                  return new MishaDbContext(options);
+              }
+          }
+          EOF
+
+      - name: Install EF tools
+        run: dotnet tool install --global dotnet-ef --version 10.0.0
+
+      - name: Scaffold authoritative tenant migration
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet ef migrations add TenantIsolation --project src/Misha.Infrastructure --startup-project src/Misha.Infrastructure --context MishaDbContext --output-dir Persistence/Migrations
+
+      - name: Replace hand-written tenant migrations with scaffolded migration
+        shell: bash
+        run: |
+          rm -f src/Misha.Infrastructure/Persistence/Migrations/20260830000000_AddApplicationTenantId.cs
+          rm -f src/Misha.Infrastructure/Persistence/Migrations/20260830000001_AddApplicantTenantId.cs
+          rm -f src/Misha.Infrastructure/MishaDbContextDesignTimeFactory.cs
+          git add src/Misha.Infrastructure/Persistence/Migrations src/Misha.Infrastructure/MishaDbContextDesignTimeFactory.cs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: scaffold tenant migrations and model snapshot'
+          git push origin HEAD:feature/tenant-isolation-bola
