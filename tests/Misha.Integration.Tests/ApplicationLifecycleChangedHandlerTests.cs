@@ -37,8 +37,8 @@ public sealed class ApplicationLifecycleChangedHandlerTests
 
     private sealed class RecordingApplicationRepository(DomainApplication application) : IApplicationRepository
     {
-        public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken) =>
-            Task.FromResult(Applicant.Create(externalReference));
+        public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, string tenantId, CancellationToken cancellationToken) =>
+            Task.FromResult(Applicant.Create(externalReference, tenantId));
 
         public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult<DomainApplication?>(id == application.Id ? application : null);
