@@ -99,7 +99,11 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
                 if (!response.IsSuccessStatusCode)
                     return Error($"Watchlist provider returned HTTP {(int)response.StatusCode}.");
 
-                var result = await response.Content.ReadFromJsonAsync<WatchlistResponse>(cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (string.IsNullOrWhiteSpace(responseBody))
+                    return Error("Watchlist provider returned an empty response.");
+
+                var result = JsonSerializer.Deserialize<WatchlistResponse>(responseBody);
                 if (result is null)
                     return Error("Watchlist provider returned an empty response.");
 
