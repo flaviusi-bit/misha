@@ -81,6 +81,9 @@ public sealed class PaymentServiceReconciliationTests
 
     private sealed class FakeApplicationRepository : IApplicationRepository
     {
+        public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken) =>
+            Task.FromResult(Applicant.Create(externalReference, "test-tenant"));
+
         public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, string tenantId, CancellationToken cancellationToken) =>
             Task.FromResult(Applicant.Create(externalReference, tenantId));
 
