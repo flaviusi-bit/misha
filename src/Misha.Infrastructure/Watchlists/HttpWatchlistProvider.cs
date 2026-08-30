@@ -117,13 +117,13 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
             {
                 return Error("Watchlist provider circuit is open.");
             }
-            catch (HttpRequestException ex)
+            catch (HttpRequestException)
             {
-                return Error($"Watchlist provider request failed: {ex.Message}");
+                return Error("Watchlist provider request failed.");
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                return Error($"Watchlist provider returned invalid JSON: {ex.Message}");
+                return Error("Watchlist provider returned invalid JSON.");
             }
         }
         finally
