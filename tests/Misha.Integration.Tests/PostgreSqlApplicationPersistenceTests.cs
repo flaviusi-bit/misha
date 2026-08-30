@@ -156,8 +156,8 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         await using (var db = new MishaDbContext(options))
         {
             var service = CreateService(db);
-            firstId = await service.CreateAsync("integration-app-idempotent", "request-123", CancellationToken.None);
-            secondId = await service.CreateAsync("integration-app-idempotent", "request-123", CancellationToken.None);
+            firstId = await service.CreateAsync("integration-app-idempotent", "request-123", "legacy", CancellationToken.None);
+            secondId = await service.CreateAsync("integration-app-idempotent", "request-123", "legacy", CancellationToken.None);
         }
         Assert.Equal(firstId, secondId);
         await using var verificationDb = new MishaDbContext(options);
@@ -172,8 +172,8 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         await using (var db = new MishaDbContext(options)) await db.Database.MigrateAsync();
         await using var verificationDb = new MishaDbContext(options);
         var service = CreateService(verificationDb);
-        await service.CreateAsync("integration-app-original", "request-456", CancellationToken.None);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("integration-app-different", "request-456", CancellationToken.None));
+        await service.CreateAsync("integration-app-original", "request-456", "legacy", CancellationToken.None);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("integration-app-different", "request-456", "legacy", CancellationToken.None));
     }
 
     private static ApplicationService CreateService(MishaDbContext db) =>
