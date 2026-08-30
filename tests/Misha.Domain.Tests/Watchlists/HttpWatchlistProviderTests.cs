@@ -182,14 +182,15 @@ public sealed class HttpWatchlistProviderTests
 
     private static HttpWatchlistProvider CreateProvider(RecordingHandler handler, string baseUrl = "https://watchlist.example.test", string endpoint = "/screen", string apiKey = "test-api-key")
     {
+        var section = $"Watchlist:Tests:{Guid.NewGuid():N}";
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Watchlist:BaseUrl"] = baseUrl,
-            ["Watchlist:Endpoint"] = endpoint,
-            ["Watchlist:ApiKey"] = apiKey,
-            ["Watchlist:ProviderName"] = "contract-test-provider"
+            [$"{section}:BaseUrl"] = baseUrl,
+            [$"{section}:Endpoint"] = endpoint,
+            [$"{section}:ApiKey"] = apiKey,
+            [$"{section}:ProviderName"] = "contract-test-provider"
         }).Build();
-        return new HttpWatchlistProvider(new TestHttpClientFactory(handler), configuration);
+        return new HttpWatchlistProvider(new TestHttpClientFactory(handler), configuration, section);
     }
 
     private static PassportDocument CreatePassport() => PassportDocument.Create(Guid.NewGuid(), "AB123456", "ROU", "DOE", "JOHN", new DateOnly(1990, 1, 1), "ROU", new DateOnly(2030, 1, 1));
