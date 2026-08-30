@@ -83,7 +83,7 @@ public sealed class DocumentServiceTests
     { public Task<ContentSafetyResult> ScanAsync(Stream content, string fileName, string contentType, CancellationToken cancellationToken) => Task.FromResult(new ContentSafetyResult(false, "blocked by safety scanner")); }
     private sealed class FakeApplicationRepository(Guid existingId) : IApplicationRepository
     {
-        public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken) => Task.FromResult(Applicant.Create(externalReference));
+        public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, string tenantId, CancellationToken cancellationToken) => Task.FromResult(Applicant.Create(externalReference, tenantId));
         public Task<DomainApplication?> GetAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<DomainApplication?>(id == existingId ? DomainApplication.Create("test") : null);
         public Task<DomainApplication?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken) => Task.FromResult<DomainApplication?>(null);
         public Task<DomainApplication> AddOrGetExistingAsync(DomainApplication application, CancellationToken cancellationToken) => Task.FromResult(application);
