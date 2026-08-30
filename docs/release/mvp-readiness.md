@@ -43,7 +43,7 @@ Authentication
 
 ## Current implementation status
 
-The repository currently has implemented slices for the critical path through eTA verification, plus payment reconciliation, cryptographic eTA trust, audit history, and the first manual-review queue implementation.
+The repository currently has implemented slices for the critical path through eTA verification, plus payment reconciliation, cryptographic eTA trust, audit history, the first manual-review queue implementation, and durable notification delivery plumbing.
 
 Document capabilities now implemented and deployed include traveller profile, pre-signed upload/download transfer, a content-safety validation boundary, and explicit document deletion with S3 and PostgreSQL cleanup.
 
@@ -56,6 +56,17 @@ Manual review now supports:
 - explicit approve/refuse resolution with a mandatory reason
 - application/review persistence in one save operation
 
+Notifications now support:
+
+- durable PostgreSQL notification queue
+- lifecycle-event driven notification creation
+- pending/failed retry processing in the worker
+- configurable HTTP delivery adapter
+- idempotency key derived from notification ID
+- delivery success/failure persistence
+
+Actual provider selection, credentials and channel-specific production contracts remain external gates.
+
 The remaining production gates below are still open.
 
 ## External blockers
@@ -67,6 +78,7 @@ Production requires confirmed providers/configuration for:
 - Watchlist provider/source
 - Passport verification provider
 - Biometric provider where required
+- Notification delivery provider
 - Jurisdiction-specific policy
 - Data retention requirements
 - Production AWS account structure
