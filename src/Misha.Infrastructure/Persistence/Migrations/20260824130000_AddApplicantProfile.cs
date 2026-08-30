@@ -22,31 +22,15 @@ public partial class AddApplicantProfile : Migration
     }
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.DropColumn(name: "FirstName", table: "applicants"); migrationBuilder.DropColumn(name: "LastName", table: "applicants"); migrationBuilder.DropColumn(name: "DateOfBirth", table: "applicants"); migrationBuilder.DropColumn(name: "Nationality", table: "applicants"); migrationBuilder.DropColumn(name: "CountryOfBirth", table: "applicants"); migrationBuilder.DropColumn(name: "PlaceOfBirth", table: "applicants"); migrationBuilder.DropColumn(name: "Gender", table: "applicants"); migrationBuilder.DropColumn(name: "Email", table: "applicants"); migrationBuilder.DropColumn(name: "PhoneNumber", table: "applicants"); migrationBuilder.DropColumn(name: "UpdatedAtUtc", table: "applicants");
-    }
-}
-
-[Migration("20260830000000_AddTenantIsolation")]
-public partial class AddTenantIsolation : Migration
-{
-    protected override void Up(MigrationBuilder migrationBuilder)
-    {
-        migrationBuilder.AddColumn<string>("TenantId", "applicants", type: "character varying(200)", maxLength: 200, nullable: true);
-        migrationBuilder.AddColumn<string>("TenantId", "applications", type: "character varying(200)", maxLength: 200, nullable: true);
-        migrationBuilder.DropIndex("IX_applicants_ExternalReference", "applicants");
-        migrationBuilder.DropIndex("IX_applications_IdempotencyKey", "applications");
-        migrationBuilder.CreateIndex("IX_applicants_TenantId_ExternalReference", "applicants", new[] { "TenantId", "ExternalReference" }, unique: true);
-        migrationBuilder.CreateIndex("IX_applications_TenantId", "applications", "TenantId");
-        migrationBuilder.CreateIndex("IX_applications_TenantId_IdempotencyKey", "applications", new[] { "TenantId", "IdempotencyKey" }, unique: true);
-    }
-    protected override void Down(MigrationBuilder migrationBuilder)
-    {
-        migrationBuilder.DropIndex("IX_applicants_TenantId_ExternalReference", "applicants");
-        migrationBuilder.DropIndex("IX_applications_TenantId", "applications");
-        migrationBuilder.DropIndex("IX_applications_TenantId_IdempotencyKey", "applications");
-        migrationBuilder.CreateIndex("IX_applicants_ExternalReference", "applicants", "ExternalReference", unique: true);
-        migrationBuilder.CreateIndex("IX_applications_IdempotencyKey", "applications", "IdempotencyKey", unique: true);
-        migrationBuilder.DropColumn("TenantId", "applicants");
-        migrationBuilder.DropColumn("TenantId", "applications");
+        migrationBuilder.DropColumn(name: "FirstName", table: "applicants");
+        migrationBuilder.DropColumn(name: "LastName", table: "applicants");
+        migrationBuilder.DropColumn(name: "DateOfBirth", table: "applicants");
+        migrationBuilder.DropColumn(name: "Nationality", table: "applicants");
+        migrationBuilder.DropColumn(name: "CountryOfBirth", table: "applicants");
+        migrationBuilder.DropColumn(name: "PlaceOfBirth", table: "applicants");
+        migrationBuilder.DropColumn(name: "Gender", table: "applicants");
+        migrationBuilder.DropColumn(name: "Email", table: "applicants");
+        migrationBuilder.DropColumn(name: "PhoneNumber", table: "applicants");
+        migrationBuilder.DropColumn(name: "UpdatedAtUtc", table: "applicants");
     }
 }
