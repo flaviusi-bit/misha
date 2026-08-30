@@ -2,15 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Misha.Infrastructure.Persistence;
-
 namespace Misha.Api;
-
 public sealed class TenantIsolationMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context, MishaDbContext db)
     {
-        if (context.User.Identity?.IsAuthenticated != true) { await next(context); return; }
-        if (IsCrossTenantAdmin(context.User)) { await next(context); return; }
+        if (context.User.Identity?.IsAuthenticated != true || IsCrossTenantAdmin(context.User)) { await next(context); return; }
         var tenantId = context.User.FindFirstValue("client_id");
         if (string.IsNullOrWhiteSpace(tenantId)) { context.Response.StatusCode = StatusCodes.Status403Forbidden; return; }
         if (TryGetGuid(context.Request.RouteValues, "id", out var id))
