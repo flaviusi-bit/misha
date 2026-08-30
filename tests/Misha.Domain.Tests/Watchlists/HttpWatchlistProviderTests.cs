@@ -54,10 +54,10 @@ public sealed class HttpWatchlistProviderTests
     [Fact]
     public async Task Maps_potential_and_confirmed_matches()
     {
-        var handler = new RecordingHandler(request =>
-            handler.Requests.Count == 0
-                ? Json("{\"decision\":\"PotentialMatch\",\"matchReference\":\"CASE-42\",\"errorMessage\":null}")
-                : Json("{\"decision\":\"ConfirmedMatch\",\"matchReference\":\"CASE-43\",\"errorMessage\":null}"));
+        var responses = new Queue<HttpResponseMessage>([
+            Json("{\"decision\":\"PotentialMatch\",\"matchReference\":\"CASE-42\",\"errorMessage\":null}"),
+            Json("{\"decision\":\"ConfirmedMatch\",\"matchReference\":\"CASE-43\",\"errorMessage\":null}")]);
+        var handler = new RecordingHandler(_ => responses.Dequeue());
         var provider = CreateProvider(handler);
 
         var potential = await provider.CheckAsync(CreatePassport(), CancellationToken.None);
