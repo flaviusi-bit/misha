@@ -30,6 +30,8 @@ public sealed class HttpNotificationDelivery(
             })
         };
 
+        request.Headers.TryAddWithoutValidation("Idempotency-Key", notification.Id.ToString("N"));
+
         if (!string.IsNullOrWhiteSpace(configuration.ApiKey))
             request.Headers.TryAddWithoutValidation("X-API-Key", configuration.ApiKey);
 
