@@ -21,5 +21,9 @@ public sealed class TenantIsolationMiddleware(RequestDelegate next)
         await next(context);
     }
     private static bool IsCrossTenantAdmin(ClaimsPrincipal user)=>user.FindAll("cognito:groups").Any(c=>string.Equals(c.Value,"misha-admin",StringComparison.Ordinal));
-    private static bool TryGetGuid(RouteValueDictionary values,string key,out Guid id)=>values.TryGetValue(key,out var value)&&Guid.TryParse(value?.ToString(),out id);
+    private static bool TryGetGuid(RouteValueDictionary values,string key,out Guid id)
+    {
+        id=Guid.Empty;
+        return values.TryGetValue(key,out var value)&&Guid.TryParse(value?.ToString(),out id);
+    }
 }
