@@ -85,7 +85,7 @@ jobs:
           rm -f src/Misha.Infrastructure/Persistence/Migrations/20260830000000_AddApplicationTenantId.cs
           rm -f src/Misha.Infrastructure/Persistence/Migrations/20260830000001_AddApplicantTenantId.cs
           rm -f src/Misha.Infrastructure/MishaDbContextDesignTimeFactory.cs
-          git add src/Misha.Infrastructure/Persistence/Migrations src/Misha.Infrastructure/MishaDbContextDesignTimeFactory.cs
+          git add -A src/Misha.Infrastructure/Persistence/Migrations
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix: scaffold tenant migration metadata and snapshot'
@@ -107,7 +107,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup Terraform
-        uses: actions/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.10.x'
 
