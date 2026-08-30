@@ -99,7 +99,11 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
                 if (!response.IsSuccessStatusCode)
                     return Error($"Watchlist provider returned HTTP {(int)response.StatusCode}.");
 
-                var result = await response.Content.ReadFromJsonAsync<WatchlistResponse>(cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (string.IsNullOrWhiteSpace(responseBody))
+                    return Error("Watchlist provider returned an empty response.");
+
+                var result = JsonSerializer.Deserialize<WatchlistResponse>(responseBody);
                 if (result is null)
                     return Error("Watchlist provider returned an empty response.");
 
@@ -117,13 +121,13 @@ public sealed class HttpWatchlistProvider : IWatchlistProvider
             {
                 return Error("Watchlist provider circuit is open.");
             }
-            catch (HttpRequestException ex)
+            catch (HttpRequestException)
             {
-                return Error($"Watchlist provider request failed: {ex.Message}");
+                return Error("Watchlist provider request failed.");
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                return Error($"Watchlist provider returned invalid JSON: {ex.Message}");
+                return Error("Watchlist provider returned invalid JSON.");
             }
         }
         finally
