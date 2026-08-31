@@ -12,8 +12,8 @@ public sealed class FastLaneVerificationCacheTests
     public void Verify_uses_cached_result_until_package_expiry()
     {
         var cache = new RecordingCache();
-        var service = new FastLaneVerificationService(cache);
-        var package = CreateValidPackage();
+        var package = CreateValidPackage(out var signer);
+        var service = new FastLaneVerificationService(cache, signer);
         var now = package.IssuedAtUtc.AddMinutes(1);
 
         Assert.True(service.Verify(package, now));
@@ -27,8 +27,8 @@ public sealed class FastLaneVerificationCacheTests
     public void Verify_does_not_use_cache_after_expiry()
     {
         var cache = new RecordingCache();
-        var service = new FastLaneVerificationService(cache);
-        var package = CreateValidPackage();
+        var package = CreateValidPackage(out var signer);
+        var service = new FastLaneVerificationService(cache, signer);
         var now = package.IssuedAtUtc.AddMinutes(1);
 
         Assert.True(service.Verify(package, now));
@@ -37,19 +37,30 @@ public sealed class FastLaneVerificationCacheTests
         Assert.Equal(1, cache.SetCount);
     }
 
-    private static FastLanePackage CreateValidPackage()
+    private static FastLanePackage CreateValidPackage(out IEtaCredentialSigner signer)
     {
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var etaNumber = "ETA-CACHE-001";
         var issued = DateTimeOffset.UtcNow.AddMinutes(-5);
         var expires = DateTimeOffset.UtcNow.AddDays(1);
+        var publicKey = ecdsa.ExportSubjectPublicKeyInfoPem();
+        signer = new TestSigner(publicKey);
         var payload = EtaCredentialPayload.Canonicalize(etaNumber, issued, expires);
         var signature = Convert.ToBase64String(ecdsa.SignData(
             Encoding.UTF8.GetBytes(payload), HashAlgorithmName.SHA256))
             .Replace("+", "-").Replace("/", "_").TrimEnd('=');
 
         return new FastLanePackage("misha-fastlane-v1", etaNumber, issued, expires,
-            "key-1", "ES256", signature, ecdsa.ExportSubjectPublicKeyInfoPem());
+            "key-1", "ES256", signature, publicKey);
+    }
+
+    private sealed class TestSigner(string publicKeyPem) : IEtaCredentialSigner
+    {
+        public bool IsEnabled => true;
+        public string KeyId => "key-1";
+        public string Algorithm => "ES256";
+        public string? PublicKeyPem => publicKeyPem;
+        public string? Sign(string etaNumber, DateTimeOffset issuedAtUtc, DateTimeOffset expiresAtUtc) => null;
     }
 
     private sealed class RecordingCache : IFastLaneVerificationCache

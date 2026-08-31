@@ -1,11 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using Misha.Application.Etas;
-using Misha.Application.FastLane;
 
 namespace Misha.Application.FastLane;
 
-public sealed class FastLaneVerificationService(IFastLaneVerificationCache cache)
+public sealed class FastLaneVerificationService(
+    IFastLaneVerificationCache cache,
+    IEtaCredentialSigner signer)
 {
     public bool Verify(FastLanePackage package, DateTimeOffset now)
     {
@@ -13,10 +14,9 @@ public sealed class FastLaneVerificationService(IFastLaneVerificationCache cache
         if (cache.TryGet(cacheKey, now, out var cached))
             return cached;
 
-        var valid = FastLaneVerifier.Verify(package, now);
-        var expiry = package.ExpiresAtUtc;
-        if (expiry > now)
-            cache.Set(cacheKey, valid, expiry);
+        var valid = FastLaneVerifier.Verify(package, now, signer.KeyId, signer.PublicKeyPem);
+        if (package.ExpiresAtUtc > now)
+            cache.Set(cacheKey, valid, package.ExpiresAtUtc);
 
         return valid;
     }
