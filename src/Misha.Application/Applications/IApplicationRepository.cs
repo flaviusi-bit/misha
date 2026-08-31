@@ -1,13 +1,13 @@
-using Misha.Domain.Applicants;
-using Misha.Domain.Applications;
+using ApplicantEntity = Misha.Domain.Applicants.Applicant;
+using ApplicationEntity = Misha.Domain.Applications.Application;
 
 namespace Misha.Application.Applications;
 
 public interface IApplicationRepository
 {
-    Task<Misha.Domain.Applicants.Applicant> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken);
-    Task<Misha.Domain.Applications.Application?> GetAsync(Guid id, CancellationToken cancellationToken);
-    Task<Misha.Domain.Applications.Application?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken);
-    Task<Misha.Domain.Applications.Application> AddOrGetExistingAsync(Misha.Domain.Applications.Application application, CancellationToken cancellationToken);
+    Task<ApplicantEntity> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken);
+    Task<ApplicationEntity?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<ApplicationEntity?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken);
+    Task<ApplicationEntity> AddOrGetExistingAsync(ApplicationEntity application, CancellationToken cancellationToken);
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }

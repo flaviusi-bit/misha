@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Applications;
+using Misha.Application.Tenants;
 using Misha.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -9,6 +10,8 @@ namespace Misha.Integration.Tests;
 
 public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
 {
+    private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("misha_test")
         .WithUsername("misha")
@@ -177,8 +180,14 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
     }
 
     private static ApplicationService CreateService(MishaDbContext db) =>
-        new(new EfApplicationRepository(db), new EfApplicationLifecycleAuditRepository(db), new EfOutboxWriter(db));
+        new(new EfApplicationRepository(db, new TestTenantContext(TestTenantId)), new EfApplicationLifecycleAuditRepository(db), new EfOutboxWriter(db), new TestTenantContext(TestTenantId));
 
     private DbContextOptions<MishaDbContext> CreateOptions() =>
         new DbContextOptionsBuilder<MishaDbContext>().UseNpgsql(_postgres.GetConnectionString()).Options;
+
+    private sealed class TestTenantContext(Guid tenantId) : ITenantContext
+    {
+        public Guid? TenantId { get; } = tenantId;
+        public bool IsAdmin => false;
+    }
 }

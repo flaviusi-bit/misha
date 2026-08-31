@@ -21,6 +21,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
         modelBuilder.Entity("Misha.Domain.Applicants.Applicant", b =>
         {
             b.Property<Guid>("Id").HasColumnType("uuid");
+            b.Property<Guid>("TenantId").HasColumnType("uuid");
             b.Property<string>("ExternalReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<string>("FirstName").HasMaxLength(100).HasColumnType("character varying(100)");
             b.Property<string>("LastName").HasMaxLength(100).HasColumnType("character varying(100)");
@@ -34,7 +35,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<DateTimeOffset>("CreatedAtUtc").HasColumnType("timestamp with time zone");
             b.Property<DateTimeOffset?>("UpdatedAtUtc").HasColumnType("timestamp with time zone");
             b.HasKey("Id");
-            b.HasIndex("ExternalReference").IsUnique();
+            b.HasIndex("TenantId", "ExternalReference").IsUnique();
             b.ToTable("applicants");
         });
 
@@ -42,6 +43,7 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
         {
             b.Property<Guid>("Id").HasColumnType("uuid");
             b.Property<uint>("Version").IsRowVersion().HasColumnName("xmin");
+            b.Property<Guid>("TenantId").HasColumnType("uuid");
             b.Property<Guid>("ApplicantId").HasColumnType("uuid");
             b.Property<string>("ApplicantReference").IsRequired().HasMaxLength(200).HasColumnType("character varying(200)");
             b.Property<string>("IdempotencyKey").HasMaxLength(200).HasColumnType("character varying(200)");
@@ -54,8 +56,8 @@ partial class MishaDbContextModelSnapshot : ModelSnapshot
             b.Property<int>("Status").HasConversion<string>().HasMaxLength(32).HasColumnType("character varying(32)");
             b.HasKey("Id");
             b.HasIndex("ApplicantId");
-            b.HasIndex("ApplicantReference");
-            b.HasIndex("IdempotencyKey").IsUnique();
+            b.HasIndex("TenantId", "ApplicantReference");
+            b.HasIndex("TenantId", "IdempotencyKey").IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL");
             b.HasIndex("Status");
             b.ToTable("applications");
         });

@@ -4,14 +4,16 @@ public sealed class Applicant
 {
     private Applicant() { }
 
-    private Applicant(Guid id, string externalReference)
+    private Applicant(Guid id, Guid tenantId, string externalReference)
     {
         Id = id;
+        TenantId = tenantId;
         ExternalReference = externalReference;
         CreatedAtUtc = DateTimeOffset.UtcNow;
     }
 
     public Guid Id { get; private set; }
+    public Guid TenantId { get; private set; }
     public string ExternalReference { get; private set; } = string.Empty;
     public string? FirstName { get; private set; }
     public string? LastName { get; private set; }
@@ -31,16 +33,17 @@ public sealed class Applicant
         && DateOfBirth.HasValue
         && !string.IsNullOrWhiteSpace(Nationality);
 
+    public static Applicant Create(Guid tenantId, string externalReference)
+    {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("Tenant id is required.", nameof(tenantId));
+
+        return new Applicant(Guid.NewGuid(), tenantId, NormalizeExternalReference(externalReference));
+    }
+
     public static Applicant Create(string externalReference)
     {
-        if (string.IsNullOrWhiteSpace(externalReference))
-            throw new ArgumentException("Applicant external reference is required.", nameof(externalReference));
-
-        var normalizedReference = externalReference.Trim();
-        if (normalizedReference.Length > 200)
-            throw new ArgumentException("Applicant external reference must be 200 characters or fewer.", nameof(externalReference));
-
-        return new Applicant(Guid.NewGuid(), normalizedReference);
+        return new Applicant(Guid.NewGuid(), Guid.Empty, NormalizeExternalReference(externalReference));
     }
 
     public void SetProfile(ApplicantProfile profile)
@@ -79,6 +82,18 @@ public sealed class Applicant
         Email = null;
         PhoneNumber = null;
         UpdatedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    private static string NormalizeExternalReference(string externalReference)
+    {
+        if (string.IsNullOrWhiteSpace(externalReference))
+            throw new ArgumentException("Applicant external reference is required.", nameof(externalReference));
+
+        var normalized = externalReference.Trim();
+        if (normalized.Length > 200)
+            throw new ArgumentException("Applicant external reference must be 200 characters or fewer.", nameof(externalReference));
+
+        return normalized;
     }
 
     private static string NormalizeRequired(string value, int maxLength, string parameterName)
