@@ -1,7 +1,9 @@
 using System;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
 #nullable disable
 namespace Misha.Infrastructure.Persistence.Migrations;
+[DbContext(typeof(MishaDbContext))]
 [Migration("20260831000000_AddTenantOwnership")]
 public partial class AddTenantOwnership : Migration
 {
