@@ -1,11 +1,136 @@
 namespace Misha.Domain.Applications;
+
 public sealed class Application
 {
     private Application() { }
-    private Application(Guid id,Guid tenantId,Guid applicantId,string applicantReference,string? idempotencyKey){Id=id;TenantId=tenantId;ApplicantId=applicantId;ApplicantReference=applicantReference;IdempotencyKey=idempotencyKey;Status=ApplicationStatus.Draft;CreatedAtUtc=DateTimeOffset.UtcNow;}
-    public Guid Id{get;private set;} public Guid TenantId{get;private set;} public Guid ApplicantId{get;private set;} public string ApplicantReference{get;private set;}=string.Empty; public string? IdempotencyKey{get;private set;} public ApplicationStatus Status{get;private set;} public DateTimeOffset CreatedAtUtc{get;private set;} public DateTimeOffset? SubmittedAtUtc{get;private set;} public DateTimeOffset? ProcessingStartedAtUtc{get;private set;} public DateTimeOffset? DecidedAtUtc{get;private set;} public DateTimeOffset? CancelledAtUtc{get;private set;} public string? RefusalReason{get;private set;} public uint Version{get;private set;}
-    public static Application Create(Guid tenantId,Guid applicantId,string applicantReference,string? idempotencyKey=null){if(tenantId==Guid.Empty)throw new ArgumentException("Tenant id is required.",nameof(tenantId));if(applicantId==Guid.Empty)throw new ArgumentException("Applicant id is required.",nameof(applicantId));if(string.IsNullOrWhiteSpace(applicantReference))throw new ArgumentException("Applicant reference is required.",nameof(applicantReference));var key=string.IsNullOrWhiteSpace(idempotencyKey)?null:idempotencyKey.Trim();if(key is not null&&key.Length>200)throw new ArgumentException("Idempotency key must be 200 characters or fewer.",nameof(idempotencyKey));return new Application(Guid.NewGuid(),tenantId,applicantId,applicantReference.Trim(),key);}
-    public static Application Create(Guid applicantId,string applicantReference,string? idempotencyKey=null){if(applicantId==Guid.Empty)throw new ArgumentException("Applicant id is required.",nameof(applicantId));return new Application(Guid.NewGuid(),Guid.Empty,applicantId,applicantReference.Trim(),string.IsNullOrWhiteSpace(idempotencyKey)?null:idempotencyKey.Trim());}
-    public static Application Create(string applicantReference,string? idempotencyKey=null)=>new Application(Guid.NewGuid(),Guid.Empty,Guid.NewGuid(),applicantReference.Trim(),string.IsNullOrWhiteSpace(idempotencyKey)?null:idempotencyKey.Trim());
-    public void Submit(){EnsureStatus(ApplicationStatus.Draft);Status=ApplicationStatus.Submitted;SubmittedAtUtc=DateTimeOffset.UtcNow;} public void StartProcessing(){EnsureStatus(ApplicationStatus.Submitted);Status=ApplicationStatus.Processing;ProcessingStartedAtUtc=DateTimeOffset.UtcNow;} public void Approve(){EnsureStatus(ApplicationStatus.Processing);Status=ApplicationStatus.Approved;DecidedAtUtc=DateTimeOffset.UtcNow;RefusalReason=null;} public void Refuse(string reason){if(string.IsNullOrWhiteSpace(reason))throw new ArgumentException("A refusal reason is required.",nameof(reason));EnsureStatus(ApplicationStatus.Processing);Status=ApplicationStatus.Refused;DecidedAtUtc=DateTimeOffset.UtcNow;RefusalReason=reason.Trim();} public void Cancel(){if(Status is not(ApplicationStatus.Draft or ApplicationStatus.Submitted or ApplicationStatus.Processing))throw new InvalidOperationException($"Applications in status '{Status}' cannot be cancelled.");Status=ApplicationStatus.Cancelled;CancelledAtUtc=DateTimeOffset.UtcNow;} private void EnsureStatus(ApplicationStatus expected){if(Status!=expected)throw new InvalidOperationException($"Application in status '{Status}' cannot transition to the requested state.");}
+
+    private Application(
+        Guid id,
+        Guid tenantId,
+        Guid applicantId,
+        string applicantReference,
+        string? idempotencyKey)
+    {
+        Id = id;
+        TenantId = tenantId;
+        ApplicantId = applicantId;
+        ApplicantReference = applicantReference;
+        IdempotencyKey = idempotencyKey;
+        Status = ApplicationStatus.Draft;
+        CreatedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    public Guid Id { get; private set; }
+    public Guid TenantId { get; private set; }
+    public Guid ApplicantId { get; private set; }
+    public string ApplicantReference { get; private set; } = string.Empty;
+    public string? IdempotencyKey { get; private set; }
+    public ApplicationStatus Status { get; private set; }
+    public DateTimeOffset CreatedAtUtc { get; private set; }
+    public DateTimeOffset? SubmittedAtUtc { get; private set; }
+    public DateTimeOffset? ProcessingStartedAtUtc { get; private set; }
+    public DateTimeOffset? DecidedAtUtc { get; private set; }
+    public DateTimeOffset? CancelledAtUtc { get; private set; }
+    public string? RefusalReason { get; private set; }
+    public uint Version { get; private set; }
+
+    public static Application Create(
+        Guid tenantId,
+        Guid applicantId,
+        string applicantReference,
+        string? idempotencyKey = null)
+    {
+        if (tenantId == Guid.Empty)
+            throw new ArgumentException("Tenant id is required.", nameof(tenantId));
+        if (applicantId == Guid.Empty)
+            throw new ArgumentException("Applicant id is required.", nameof(applicantId));
+        if (string.IsNullOrWhiteSpace(applicantReference))
+            throw new ArgumentException("Applicant reference is required.", nameof(applicantReference));
+
+        var key = string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim();
+        if (key is not null && key.Length > 200)
+            throw new ArgumentException("Idempotency key must be 200 characters or fewer.", nameof(idempotencyKey));
+
+        return new Application(
+            Guid.NewGuid(),
+            tenantId,
+            applicantId,
+            applicantReference.Trim(),
+            key);
+    }
+
+    public static Application Create(
+        Guid applicantId,
+        string applicantReference,
+        string? idempotencyKey = null)
+    {
+        if (applicantId == Guid.Empty)
+            throw new ArgumentException("Applicant id is required.", nameof(applicantId));
+
+        return new Application(
+            Guid.NewGuid(),
+            Guid.Empty,
+            applicantId,
+            applicantReference.Trim(),
+            string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim());
+    }
+
+    public static Application Create(
+        string applicantReference,
+        string? idempotencyKey = null) =>
+        new(
+            Guid.NewGuid(),
+            Guid.Empty,
+            Guid.NewGuid(),
+            applicantReference.Trim(),
+            string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim());
+
+    public void Submit()
+    {
+        EnsureStatus(ApplicationStatus.Draft);
+        Status = ApplicationStatus.Submitted;
+        SubmittedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    public void StartProcessing()
+    {
+        EnsureStatus(ApplicationStatus.Submitted);
+        Status = ApplicationStatus.Processing;
+        ProcessingStartedAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    public void Approve()
+    {
+        EnsureStatus(ApplicationStatus.Processing);
+        Status = ApplicationStatus.Approved;
+        DecidedAtUtc = DateTimeOffset.UtcNow;
+        RefusalReason = null;
+    }
+
+    public void Refuse(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("A refusal reason is required.", nameof(reason));
+
+        EnsureStatus(ApplicationStatus.Processing);
+        Status = ApplicationStatus.Refused;
+        DecidedAtUtc = DateTimeOffset.UtcNow;
+        RefusalReason = reason.Trim();
+    }
+
+    public void Cancel()
+    {
+        if (Status is not (ApplicationStatus.Draft or ApplicationStatus.Submitted or ApplicationStatus.Processing))
+            throw new InvalidOperationException($"Applications in status '{Status}' cannot be cancelled.");
+
+        Status = ApplicationStatus.Cancelled;
+        CancelledAtUtc = DateTimeOffset.UtcNow;
+    }
+
+    private void EnsureStatus(ApplicationStatus expected)
+    {
+        if (Status != expected)
+            throw new InvalidOperationException(
+                $"Application in status '{Status}' cannot transition to the requested state.");
+    }
 }
