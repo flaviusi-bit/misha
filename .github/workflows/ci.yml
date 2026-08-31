@@ -86,6 +86,14 @@ jobs:
         run: terraform init -backend=false
 
       - name: Terraform validate
+        working-directory: infrastructure/terraform
+        run: terraform validate
+
+      - name: Terraform bootstrap init
+        working-directory: infrastructure/terraform-bootstrap
+        run: terraform init
+
+      - name: Terraform bootstrap validate
         working-directory: infrastructure/terraform-bootstrap
         run: terraform validate
 
