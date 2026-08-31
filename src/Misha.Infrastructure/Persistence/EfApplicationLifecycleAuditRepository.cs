@@ -26,9 +26,7 @@ public sealed class EfApplicationLifecycleAuditRepository(
         if (!tenantContext.IsAdmin)
         {
             if (tenantContext.TenantId is null)
-            {
                 return [];
-            }
 
             query = query.Where(x => db.Applications
                 .Any(a => a.Id == x.ApplicationId && a.TenantId == tenantContext.TenantId));
