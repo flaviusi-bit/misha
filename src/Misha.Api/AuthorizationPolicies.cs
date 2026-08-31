@@ -11,6 +11,7 @@ public static class AuthorizationPolicies
     public const string DecisionWrite = "decision.write";
     public const string ReviewRead = "review.read";
     public const string ReviewWrite = "review.write";
+    public const string AdminRead = "admin.read";
 
     private const string ScopeClaim = "scope";
     private const string GroupClaim = "cognito:groups";
@@ -64,6 +65,12 @@ public static class AuthorizationPolicies
                     .RequireAssertion(context =>
                         HasScope(context.User, apiIdentifier, "review.write") &&
                         IsInAnyGroup(context.User, "misha-admin", "misha-reviewer")));
+
+            options.AddPolicy(AdminRead, policy =>
+                policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        HasScope(context.User, apiIdentifier, "read") &&
+                        IsInAnyGroup(context.User, "misha-admin")));
         });
     }
 
