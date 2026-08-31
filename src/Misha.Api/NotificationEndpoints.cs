@@ -23,6 +23,10 @@ public static class NotificationEndpoints
                     ct);
                 return Results.Accepted($"/notifications/{notificationId}", new { id = notificationId });
             }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.NotFound(new { error = ex.Message });
+            }
             catch (ArgumentException ex)
             {
                 return Results.BadRequest(new { error = ex.Message });
