@@ -179,8 +179,15 @@ public sealed class PostgreSqlApplicationPersistenceTests : IAsyncLifetime
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync("integration-app-different", "request-456", CancellationToken.None));
     }
 
-    private static ApplicationService CreateService(MishaDbContext db) =>
-        new(new EfApplicationRepository(db, new TestTenantContext(TestTenantId)), new EfApplicationLifecycleAuditRepository(db), new EfOutboxWriter(db), new TestTenantContext(TestTenantId));
+    private static ApplicationService CreateService(MishaDbContext db)
+    {
+        var tenantContext = new TestTenantContext(TestTenantId);
+        return new ApplicationService(
+            new EfApplicationRepository(db, tenantContext),
+            new EfApplicationLifecycleAuditRepository(db, tenantContext),
+            new EfOutboxWriter(db),
+            tenantContext);
+    }
 
     private DbContextOptions<MishaDbContext> CreateOptions() =>
         new DbContextOptionsBuilder<MishaDbContext>().UseNpgsql(_postgres.GetConnectionString()).Options;
