@@ -46,7 +46,7 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         applicant.Property(x => x.CreatedAtUtc).IsRequired();
         applicant.Property(x => x.UpdatedAtUtc);
         applicant.Ignore(x => x.ProfileCompleted);
-        applicant.HasIndex(x => x.ExternalReference).IsUnique();
+        applicant.HasIndex(x => new { x.TenantId, x.ExternalReference }).IsUnique();
 
         var application = modelBuilder.Entity<MishaApplication>();
         application.ToTable("applications");
@@ -59,9 +59,9 @@ public sealed class MishaDbContext(DbContextOptions<MishaDbContext> options) : D
         application.Property(x => x.RefusalReason).HasMaxLength(1000);
         application.Property(x => x.Version).IsRowVersion();
         application.HasIndex(x => x.ApplicantId);
-        application.HasIndex(x => x.ApplicantReference);
+        application.HasIndex(x => new { x.TenantId, x.ApplicantReference });
         application.HasIndex(x => x.Status);
-        application.HasIndex(x => x.IdempotencyKey).IsUnique();
+        application.HasIndex(x => new { x.TenantId, x.IdempotencyKey }).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL");
         application.HasOne<Applicant>().WithMany().HasForeignKey(x => x.ApplicantId).OnDelete(DeleteBehavior.Restrict);
 
         var lifecycleAudit = modelBuilder.Entity<ApplicationLifecycleAudit>();
