@@ -59,6 +59,9 @@ jobs:
         run: |
           dotnet tool install --global dotnet-ef --version 10.0.0
           export PATH="$PATH:$HOME/.dotnet/tools"
+          echo '--- DISCOVERED MIGRATIONS ---'
+          dotnet ef migrations list --project src/Misha.Infrastructure --startup-project src/Misha.Api --configuration Release --no-build --verbose
+          echo '--- END DISCOVERED MIGRATIONS ---'
           dotnet ef migrations add EfDiagnostic --project src/Misha.Infrastructure --startup-project src/Misha.Api --output-dir /tmp/ef-diagnostic --configuration Release --no-build --verbose
           echo '--- GENERATED MIGRATION ---'
           cat /tmp/ef-diagnostic/*EfDiagnostic.cs
