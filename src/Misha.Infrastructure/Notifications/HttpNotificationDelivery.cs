@@ -5,9 +5,7 @@ using Misha.Domain.Notifications;
 
 namespace Misha.Infrastructure.Notifications;
 
-public sealed class HttpNotificationDelivery(
-    HttpClient httpClient,
-    IOptions<NotificationDeliveryOptions> options) : INotificationDelivery
+public sealed class HttpNotificationDelivery(HttpClient httpClient, IOptions<NotificationDeliveryOptions> options) : INotificationDelivery
 {
     public async Task DeliverAsync(Notification notification, CancellationToken cancellationToken)
     {
@@ -31,12 +29,18 @@ public sealed class HttpNotificationDelivery(
         };
 
         request.Headers.TryAddWithoutValidation("Idempotency-Key", notification.Id.ToString("N"));
-
         if (!string.IsNullOrWhiteSpace(configuration.ApiKey))
             request.Headers.TryAddWithoutValidation("X-API-Key", configuration.ApiKey);
 
-        using var response = await httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException($"Notification delivery endpoint returned {(int)response.StatusCode} {response.ReasonPhrase}.");
+        try
+        {
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException("Notification delivery endpoint returned a non-success status.");
+        }
+        catch (HttpRequestException)
+        {
+            throw new HttpRequestException("Notification delivery request failed.");
+        }
     }
 }
