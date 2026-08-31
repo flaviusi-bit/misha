@@ -46,13 +46,14 @@ public static class NotificationEndpoints
                 x.RecipientReference,
                 x.Channel,
                 x.Template,
+                x.Payload,
                 x.Status,
                 x.Attempts,
                 x.CreatedAtUtc,
                 x.LastAttemptAtUtc,
                 x.LastError
             }));
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.AdminRead);
     }
 
     public sealed record QueueNotificationRequest(
