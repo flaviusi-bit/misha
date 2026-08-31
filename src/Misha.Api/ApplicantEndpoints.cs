@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Documents;
+using Misha.Application.Tenants;
 using Misha.Domain.Applicants;
 using Misha.Domain.Documents;
 using Misha.Infrastructure.Persistence;
@@ -10,30 +11,28 @@ public static class ApplicantEndpoints
 {
     public static void Map(WebApplication app)
     {
-        app.MapGet("/applicants/{id:guid}", async (Guid id, MishaDbContext db, CancellationToken ct) =>
+        app.MapGet("/applicants/{id:guid}", async (Guid id, ITenantContext tenant, MishaDbContext db, CancellationToken ct) =>
         {
-            var applicant = await db.Applicants.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
-            return applicant is null
-                ? Results.NotFound()
-                : Results.Ok(ToResponse(applicant));
+            var applicant = await GetApplicant(db, tenant, id, ct);
+            return applicant is null ? Results.NotFound() : Results.Ok(ToResponse(applicant));
         }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
         app.MapPut("/applicants/{id:guid}/profile", async (
             Guid id,
             ApplicantProfileRequest request,
             HttpContext httpContext,
+            ITenantContext tenant,
             ILoggerFactory loggerFactory,
             MishaDbContext db,
             CancellationToken ct) =>
         {
-            var applicant = await db.Applicants.SingleOrDefaultAsync(x => x.Id == id, ct);
+            var applicant = await GetApplicant(db, tenant, id, ct);
             if (applicant is null)
                 return Results.NotFound();
 
             try
             {
                 var identity = AuditIdentityContext.From(httpContext);
-
                 applicant.SetProfile(new ApplicantProfile(
                     request.FirstName,
                     request.LastName,
@@ -46,7 +45,6 @@ public static class ApplicantEndpoints
                     request.PhoneNumber));
 
                 await db.SaveChangesAsync(ct);
-
                 loggerFactory.CreateLogger("Misha.Security.Audit").LogInformation(
                     "Applicant profile updated. ApplicantId={ApplicantId} ActorSubject={ActorSubject} ClientId={ClientId} ProfileCompleted={ProfileCompleted}",
                     applicant.Id,
@@ -99,6 +97,23 @@ public static class ApplicantEndpoints
                 return Results.NotFound(new { error = ex.Message });
             }
         }).RequireAuthorization(AuthorizationPolicies.ApiRead);
+    }
+
+    private static Task<Applicant?> GetApplicant(
+        MishaDbContext db,
+        ITenantContext tenant,
+        Guid id,
+        CancellationToken ct)
+    {
+        if (tenant.IsAdmin)
+            return db.Applicants.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+
+        if (!tenant.TenantId.HasValue)
+            return Task.FromResult<Applicant?>(null);
+
+        return db.Applicants.AsNoTracking().SingleOrDefaultAsync(
+            x => x.Id == id && x.TenantId == tenant.TenantId.Value,
+            ct);
     }
 
     private static ApplicantResponse ToResponse(Applicant applicant) =>

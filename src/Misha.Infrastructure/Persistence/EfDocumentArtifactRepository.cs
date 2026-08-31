@@ -1,16 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using Misha.Application.Documents;
+using Misha.Application.Tenants;
 using Misha.Domain.Documents;
 
 namespace Misha.Infrastructure.Persistence;
 
-public sealed class EfDocumentArtifactRepository(MishaDbContext db) : IDocumentArtifactRepository
+public sealed class EfDocumentArtifactRepository(MishaDbContext db, ITenantContext tenantContext) : IDocumentArtifactRepository
 {
     public async Task<IReadOnlyList<DocumentArtifact>> GetByApplicationAsync(
         Guid applicationId,
         CancellationToken cancellationToken) =>
         await db.DocumentArtifacts
-            .Where(x => x.ApplicationId == applicationId)
+            .Where(x => x.ApplicationId == applicationId &&
+                        (tenantContext.IsAdmin || db.Applications.Any(a =>
+                            a.Id == x.ApplicationId && a.TenantId == tenantContext.TenantId)))
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 

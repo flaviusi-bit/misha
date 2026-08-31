@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Misha.Application.Tenants;
 
 namespace Misha.Api;
 
@@ -10,18 +11,23 @@ public static class AuthorizationPolicies
     public const string DecisionWrite = "decision.write";
     public const string ReviewRead = "review.read";
     public const string ReviewWrite = "review.write";
+    public const string AdminRead = "admin.read";
 
     private const string ScopeClaim = "scope";
     private const string GroupClaim = "cognito:groups";
 
     private static readonly string[] ReadGroups =
-    ["misha-admin", "misha-operator", "misha-reviewer", "misha-auditor"];
+        ["misha-admin", "misha-operator", "misha-reviewer", "misha-auditor"];
 
     private static readonly string[] WriteGroups =
-    ["misha-admin", "misha-operator"];
+        ["misha-admin", "misha-operator"];
 
     public static void Add(IServiceCollection services, string apiIdentifier)
     {
+        services.AddHttpContextAccessor();
+        services.AddScoped<ITenantContext, TenantContext>();
+        services.AddScoped<ITenantResolver, ConfigurationTenantResolver>();
+
         services.AddAuthorization(options =>
         {
             options.AddPolicy(ApiRead, policy =>
@@ -59,6 +65,12 @@ public static class AuthorizationPolicies
                     .RequireAssertion(context =>
                         HasScope(context.User, apiIdentifier, "review.write") &&
                         IsInAnyGroup(context.User, "misha-admin", "misha-reviewer")));
+
+            options.AddPolicy(AdminRead, policy =>
+                policy.RequireAuthenticatedUser()
+                    .RequireAssertion(context =>
+                        HasScope(context.User, apiIdentifier, "read") &&
+                        IsInAnyGroup(context.User, "misha-admin")));
         });
     }
 
@@ -66,10 +78,13 @@ public static class AuthorizationPolicies
     {
         var expected = $"{apiIdentifier.TrimEnd('/')}/{scope}";
         return user.FindAll(ScopeClaim)
-            .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .SelectMany(claim => claim.Value.Split(
+                ' ',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Any(value => string.Equals(value, expected, StringComparison.Ordinal));
     }
 
     private static bool IsInAnyGroup(ClaimsPrincipal user, params string[] groups) =>
-        groups.Any(group => user.FindAll(GroupClaim).Any(claim => string.Equals(claim.Value, group, StringComparison.Ordinal)));
+        groups.Any(group => user.FindAll(GroupClaim)
+            .Any(claim => string.Equals(claim.Value, group, StringComparison.Ordinal)));
 }

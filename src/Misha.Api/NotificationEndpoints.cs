@@ -23,6 +23,10 @@ public static class NotificationEndpoints
                     ct);
                 return Results.Accepted($"/notifications/{notificationId}", new { id = notificationId });
             }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.NotFound(new { error = ex.Message });
+            }
             catch (ArgumentException ex)
             {
                 return Results.BadRequest(new { error = ex.Message });
@@ -42,13 +46,14 @@ public static class NotificationEndpoints
                 x.RecipientReference,
                 x.Channel,
                 x.Template,
+                x.Payload,
                 x.Status,
                 x.Attempts,
                 x.CreatedAtUtc,
                 x.LastAttemptAtUtc,
                 x.LastError
             }));
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.AdminRead);
     }
 
     public sealed record QueueNotificationRequest(
