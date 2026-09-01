@@ -42,7 +42,7 @@ public static class PaymentServiceRegistration
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
         app.MapPost("/applications/{id:guid}/payment/reconcile", async (
             Guid id,
@@ -53,7 +53,7 @@ public static class PaymentServiceRegistration
             return payment is null
                 ? Results.NotFound()
                 : Results.Ok(ToResponse(payment));
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
         app.MapGet("/applications/{id:guid}/payment", async (
             Guid id,
@@ -64,7 +64,7 @@ public static class PaymentServiceRegistration
             return payment is null
                 ? Results.NotFound()
                 : Results.Ok(ToResponse(payment));
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ApiRead);
     }
 
     private static PaymentResponse ToResponse(Misha.Domain.Payments.Payment payment) => new(
