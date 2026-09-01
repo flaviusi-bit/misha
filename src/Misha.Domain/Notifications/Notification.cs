@@ -35,7 +35,12 @@ public sealed class Notification
         if (string.IsNullOrWhiteSpace(recipientReference)) throw new ArgumentException("Recipient reference is required.", nameof(recipientReference));
         if (string.IsNullOrWhiteSpace(channel)) throw new ArgumentException("Channel is required.", nameof(channel));
         if (string.IsNullOrWhiteSpace(template)) throw new ArgumentException("Template is required.", nameof(template));
-        return new Notification(Guid.NewGuid(), applicationId, recipientReference.Trim(), channel.Trim(), template.Trim(), payload ?? string.Empty);
+
+        var normalizedPayload = payload ?? string.Empty;
+        if (normalizedPayload.Length > NotificationPayloadLimits.MaxPayloadLength)
+            throw new ArgumentException($"Notification payload cannot exceed {NotificationPayloadLimits.MaxPayloadLength} characters.", nameof(payload));
+
+        return new Notification(Guid.NewGuid(), applicationId, recipientReference.Trim(), channel.Trim(), template.Trim(), normalizedPayload);
     }
 
     public void MarkSent()
