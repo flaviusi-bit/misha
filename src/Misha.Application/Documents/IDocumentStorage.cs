@@ -8,6 +8,8 @@ public interface IDocumentStorage
         string contentType,
         CancellationToken cancellationToken);
 
+    Task<Stream> OpenReadAsync(string storageKey, CancellationToken cancellationToken);
+
     Task DeleteAsync(string storageKey, CancellationToken cancellationToken);
 
     Uri CreatePreSignedUploadUrl(string storageKey, string contentType, TimeSpan lifetime);
