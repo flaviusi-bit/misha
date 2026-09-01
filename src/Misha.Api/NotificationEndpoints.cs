@@ -31,7 +31,7 @@ public static class NotificationEndpoints
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
         app.MapGet("/admin/notifications/pending", async (
             int? limit,
