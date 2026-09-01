@@ -43,13 +43,13 @@ public static class EtaServiceRegistration
             }
             catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
             catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
         app.MapGet("/applications/{id:guid}/eta", async (Guid id, EtaService service, IEtaCredentialSigner signer, CancellationToken ct) =>
         {
             var eta = await service.GetAsync(id, ct);
             return eta is null ? Results.NotFound() : Results.Ok(ToResponse(new EtaIssueResult(eta, null, false), app.Configuration, signer));
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ApiRead);
 
         app.MapPost("/applications/{id:guid}/eta/revoke", async (Guid id, EtaRevocationRequest request, ClaimsPrincipal user, EtaService service, CancellationToken ct) =>
         {
@@ -62,7 +62,7 @@ public static class EtaServiceRegistration
             catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
             catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
             catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
         app.MapGet("/eta/verify/{etaNumber}", (HttpResponse response) =>
         {
@@ -91,11 +91,11 @@ public static class EtaServiceRegistration
             try { return Results.Ok(await service.CreatePackageAsync(id, ct)); }
             catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
             catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
-        }).RequireAuthorization();
+        }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
         app.MapPost("/fast-lane/verify", (FastLanePackage package, FastLaneVerificationService verifier) =>
             Results.Ok(new { valid = verifier.Verify(package, DateTimeOffset.UtcNow) }))
-            .RequireAuthorization();
+            .RequireAuthorization(AuthorizationPolicies.DecisionRead);
     }
 
     private static EtaResponse ToResponse(EtaIssueResult result, IConfiguration configuration, IEtaCredentialSigner signer)
