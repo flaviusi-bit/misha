@@ -38,13 +38,13 @@ public sealed class PaymentService(
             var result = await provider.CreateAsync(payment, cancellationToken);
             ApplyProviderResult(payment, result);
         }
-        catch (Exception) when (true)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            payment.MarkFailed(GenericProviderFailure);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             // Provider implementation details must never cross the application/API boundary.
-            // Preserve cancellation semantics while converting unexpected provider failures to a safe result.
-            if (cancellationToken.IsCancellationRequested)
-                throw;
-
             payment.MarkFailed(GenericProviderFailure);
         }
 
