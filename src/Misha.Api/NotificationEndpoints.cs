@@ -63,10 +63,10 @@ public static class NotificationEndpoints
             }));
         }).RequireAuthorization(AuthorizationPolicies.AdminRead);
     }
-
-    public sealed record QueueNotificationRequest(
-        string RecipientReference,
-        string Channel,
-        string Template,
-        string Payload);
 }
+
+public sealed record QueueNotificationRequest(
+    string RecipientReference,
+    string Channel,
+    string Template,
+    string Payload);
