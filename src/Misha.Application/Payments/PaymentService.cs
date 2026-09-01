@@ -9,6 +9,8 @@ public sealed class PaymentService(
     IPaymentRepository payments,
     IPaymentProvider provider)
 {
+    private const string GenericProviderFailure = "Payment could not be completed.";
+
     public async Task<Payment> CreateAsync(
         Guid applicationId,
         long amountMinor,
@@ -36,9 +38,14 @@ public sealed class PaymentService(
             var result = await provider.CreateAsync(payment, cancellationToken);
             ApplyProviderResult(payment, result);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception) when (true)
         {
-            payment.MarkFailed(ex.Message);
+            // Provider implementation details must never cross the application/API boundary.
+            // Preserve cancellation semantics while converting unexpected provider failures to a safe result.
+            if (cancellationToken.IsCancellationRequested)
+                throw;
+
+            payment.MarkFailed(GenericProviderFailure);
         }
 
         await payments.SaveChangesAsync(cancellationToken);
@@ -65,6 +72,10 @@ public sealed class PaymentService(
         {
             return payment;
         }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return payment;
+        }
 
         ApplyProviderResult(payment, result);
         await payments.SaveChangesAsync(cancellationToken);
@@ -88,12 +99,12 @@ public sealed class PaymentService(
                     result.ActionUrl ?? payment.ActionUrl);
                 break;
             case PaymentStatus.Failed:
-                payment.MarkFailed(result.ErrorMessage ?? "Payment provider returned a failed status.");
+                payment.MarkFailed(GenericProviderFailure);
                 break;
             case PaymentStatus.Pending:
                 break;
             default:
-                payment.MarkFailed(result.ErrorMessage ?? "Payment provider returned an invalid status.");
+                payment.MarkFailed(GenericProviderFailure);
                 break;
         }
     }
