@@ -25,6 +25,10 @@ public static class PaymentServiceRegistration
             PaymentService service,
             CancellationToken ct) =>
         {
+            var validation = ApiRequestValidation.ValidateCreatePayment(request);
+            if (validation is not null)
+                return Results.ValidationProblem(validation);
+
             try
             {
                 var payment = await service.CreateAsync(id, request.AmountMinor, request.Currency, ct);

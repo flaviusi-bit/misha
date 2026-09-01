@@ -9,10 +9,15 @@ public static class ManualReviewEndpoints
     public static void Map(WebApplication app)
     {
         app.MapGet("/admin/manual-reviews", async (
+            int? limit,
             ManualReviewService service,
             CancellationToken ct) =>
         {
-            var cases = await service.GetOpenAsync(ct);
+            var boundedLimit = ApiRequestValidation.NormalizePageSize(
+                limit,
+                ApiRequestValidation.DefaultManualReviewPageSize,
+                ApiRequestValidation.MaxManualReviewPageSize);
+            var cases = await service.GetOpenAsync(boundedLimit, ct);
             return Results.Ok(cases.Select(ToResponse));
         }).RequireAuthorization(AuthorizationPolicies.ReviewRead);
 
@@ -65,6 +70,10 @@ public static class ManualReviewEndpoints
             ManualReviewService service,
             CancellationToken ct) =>
         {
+            var validation = ApiRequestValidation.ValidateManualReviewResolution(request);
+            if (validation is not null)
+                return Results.ValidationProblem(validation);
+
             var actor = GetActor(user);
 
             try

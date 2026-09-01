@@ -7,8 +7,8 @@ public sealed class ManualReviewService(
     IManualReviewRepository reviews,
     IApplicationRepository applications)
 {
-    public Task<IReadOnlyList<ManualReviewCase>> GetOpenAsync(CancellationToken cancellationToken) =>
-        reviews.GetOpenAsync(cancellationToken);
+    public Task<IReadOnlyList<ManualReviewCase>> GetOpenAsync(int limit, CancellationToken cancellationToken) =>
+        reviews.GetOpenAsync(limit, cancellationToken);
 
     public async Task<ManualReviewCase> GetAsync(Guid id, CancellationToken cancellationToken) =>
         await reviews.GetAsync(id, cancellationToken)
@@ -46,7 +46,6 @@ public sealed class ManualReviewService(
                 throw new ArgumentOutOfRangeException(nameof(resolution));
         }
 
-        // Both aggregates are tracked by the same DbContext; persist them atomically in one save.
         await reviews.SaveChangesAsync(cancellationToken);
     }
 }
