@@ -9,6 +9,7 @@ public sealed class NotificationDeliveryWorker(
     IOptions<NotificationDeliveryOptions> options,
     ILogger<NotificationDeliveryWorker> logger) : BackgroundService
 {
+    private const string GenericDeliveryFailure = "Notification delivery failed.";
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -46,7 +47,7 @@ public sealed class NotificationDeliveryWorker(
                     }
                     catch (Exception exception)
                     {
-                        notification.MarkFailed(exception.Message);
+                        notification.MarkFailed(GenericDeliveryFailure);
                         logger.LogWarning(
                             exception,
                             "Notification {NotificationId} delivery failed on attempt {Attempt}.",
