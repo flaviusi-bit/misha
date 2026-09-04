@@ -23,6 +23,44 @@ public sealed class PassportVerificationServiceTests
     }
 
     [Fact]
+    public async Task Provider_error_details_are_not_exposed()
+    {
+        var applicationId = Guid.NewGuid();
+        var passport = CreatePassport(applicationId, DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)));
+        var repository = new InMemoryPassportRepository(passport);
+        var provider = new StubPassportVerificationProvider(
+            new PassportVerificationResult(
+                PassportVerificationDecision.Error,
+                Reference: "VERIFY-123",
+                ErrorMessage: "secret provider token and internal endpoint"));
+        var service = new PassportVerificationService(repository, provider);
+
+        var result = await service.VerifyAsync(applicationId, CancellationToken.None);
+
+        Assert.Equal(PassportVerificationDecision.Error, result.Decision);
+        Assert.Equal("VERIFY-123", result.Reference);
+        Assert.Equal("Passport verification could not be completed.", result.ErrorMessage);
+        Assert.DoesNotContain("secret provider token", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Provider_exception_details_are_not_exposed()
+    {
+        var applicationId = Guid.NewGuid();
+        var passport = CreatePassport(applicationId, DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)));
+        var repository = new InMemoryPassportRepository(passport);
+        var provider = new ThrowingPassportVerificationProvider(
+            "secret api key and database connection details");
+        var service = new PassportVerificationService(repository, provider);
+
+        var result = await service.VerifyAsync(applicationId, CancellationToken.None);
+
+        Assert.Equal(PassportVerificationDecision.Error, result.Decision);
+        Assert.Equal("Passport verification could not be completed.", result.ErrorMessage);
+        Assert.DoesNotContain("secret api key", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Expired_passport_is_rejected_without_calling_provider()
     {
         var applicationId = Guid.NewGuid();
@@ -91,5 +129,15 @@ public sealed class PassportVerificationServiceTests
             Called = true;
             return Task.FromResult(result);
         }
+    }
+
+    private sealed class ThrowingPassportVerificationProvider(string message) : IPassportVerificationProvider
+    {
+        public string Name => "throwing-stub";
+
+        public Task<PassportVerificationResult> VerifyAsync(
+            PassportDocument passport,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException(message);
     }
 }
