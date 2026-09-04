@@ -2,7 +2,7 @@ using Misha.Application.Applications;
 using Misha.Application.Documents;
 using Misha.Application.Policy;
 using Misha.Application.Watchlists;
-using Misha.Domain.Applications;
+using ApplicationEntity = Misha.Domain.Applications.Application;
 using Misha.Domain.Applicants;
 using Misha.Domain.Documents;
 using Misha.Domain.Watchlists;
@@ -15,7 +15,7 @@ public sealed class PolicyServiceSecurityTests
     [Fact]
     public async Task Passport_provider_exception_details_are_not_exposed_by_policy_evaluation()
     {
-        var application = Application.Create("APP-123");
+        var application = ApplicationEntity.Create("APP-123");
         application.Submit();
         application.StartProcessing();
 
@@ -68,18 +68,18 @@ public sealed class PolicyServiceSecurityTests
             throw new InvalidOperationException(Message);
     }
 
-    private sealed class StubApplicationRepository(Application application) : IApplicationRepository
+    private sealed class StubApplicationRepository(ApplicationEntity application) : IApplicationRepository
     {
-        public Task<Application?> GetAsync(Guid id, CancellationToken cancellationToken) =>
-            Task.FromResult<Application?>(application.Id == id ? application : null);
+        public Task<ApplicationEntity?> GetAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult<ApplicationEntity?>(application.Id == id ? application : null);
 
         public Task<Applicant> GetOrCreateApplicantAsync(string externalReference, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<Application> AddOrGetExistingAsync(Application application, CancellationToken cancellationToken) =>
+        public Task<ApplicationEntity> AddOrGetExistingAsync(ApplicationEntity application, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<Application?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken) =>
+        public Task<ApplicationEntity?> GetByIdempotencyKeyAsync(string idempotencyKey, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
