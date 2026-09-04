@@ -14,6 +14,8 @@ public sealed class PolicyService(
     IPolicyEngine engine,
     IRiskAssessmentEngine? riskAssessmentEngine = null)
 {
+    private const string GenericProviderFailure = "Passport verification could not be completed.";
+
     private readonly IRiskAssessmentEngine _riskAssessmentEngine = riskAssessmentEngine ?? new DeterministicRiskAssessmentEngine();
 
     public async Task<PolicyEvaluation> EvaluateAsync(
@@ -41,11 +43,11 @@ public sealed class PolicyService(
         {
             verification = await passportVerification.VerifyAsync(passport, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             verification = new PassportVerificationResult(
                 PassportVerificationDecision.Error,
-                ErrorMessage: ex.Message);
+                ErrorMessage: GenericProviderFailure);
         }
 
         return engine.Evaluate(new PolicyContext(
