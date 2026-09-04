@@ -43,14 +43,13 @@ public sealed class PolicyServiceSecurityTests
 
         Assert.Equal(PolicyDecision.NotReady, result.Decision);
         Assert.Equal(PassportVerificationDecision.Error, engine.Context?.PassportVerificationDecision);
-        Assert.DoesNotContain("secret provider token", engine.Context?.PassportVerificationDecision.ToString() ?? string.Empty, StringComparison.Ordinal);
-        Assert.Equal("Passport verification could not be completed.", engine.VerificationErrorMessage);
+        Assert.DoesNotContain("secret provider token", string.Join(" ", result.Reasons), StringComparison.Ordinal);
+        Assert.DoesNotContain("internal database connection details", string.Join(" ", result.Reasons), StringComparison.Ordinal);
     }
 
     private sealed class CapturingPolicyEngine : IPolicyEngine
     {
         public PolicyContext? Context { get; private set; }
-        public string? VerificationErrorMessage { get; private set; }
 
         public PolicyEvaluation Evaluate(PolicyContext context)
         {
