@@ -6,6 +6,8 @@ public sealed class PassportVerificationService(
     IPassportRepository passports,
     IPassportVerificationProvider provider)
 {
+    private const string GenericProviderFailure = "Passport verification could not be completed.";
+
     public async Task<PassportVerificationResult> VerifyAsync(
         Guid applicationId,
         CancellationToken cancellationToken)
@@ -24,21 +26,21 @@ public sealed class PassportVerificationService(
         {
             var result = await provider.VerifyAsync(passport, cancellationToken);
 
-            if (result.Decision is PassportVerificationDecision.NotVerified)
+            if (result.Decision is PassportVerificationDecision.NotVerified or PassportVerificationDecision.Error)
             {
                 return new PassportVerificationResult(
                     PassportVerificationDecision.Error,
                     result.Reference,
-                    result.ErrorMessage ?? "Passport verification provider returned an incomplete result.");
+                    GenericProviderFailure);
             }
 
             return result;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             return new PassportVerificationResult(
                 PassportVerificationDecision.Error,
-                ErrorMessage: ex.Message);
+                ErrorMessage: GenericProviderFailure);
         }
     }
 }
