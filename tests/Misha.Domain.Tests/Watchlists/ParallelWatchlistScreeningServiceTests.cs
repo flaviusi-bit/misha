@@ -100,16 +100,32 @@ public sealed class ParallelWatchlistScreeningServiceTests
     }
 
     [Fact]
-    public async Task Provider_exception_isolated_as_error_and_other_provider_completes()
+    public async Task Provider_error_message_is_not_persisted_or_returned()
     {
+        const string secret = "secret-provider-url-and-api-key";
+        var result = await RunProvidersAsync(
+            new DelegateProvider("broken", (_, _) => Task.FromResult(
+                new WatchlistProviderResult(WatchlistDecision.Error, ErrorMessage: secret))));
+
+        var broken = Assert.Single(result.Providers);
+        Assert.Equal(WatchlistDecision.Error, broken.Check.Decision);
+        Assert.Equal("Watchlist provider request failed.", broken.Check.ErrorMessage);
+        Assert.DoesNotContain(secret, broken.Check.ErrorMessage!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Provider_exception_isolated_as_generic_error_and_other_provider_completes()
+    {
+        const string secret = "provider unavailable https://internal.example/api?token=secret";
         var result = await RunProvidersAsync(
             new DelegateProvider("healthy", (_, _) => Task.FromResult(new WatchlistProviderResult(WatchlistDecision.Clear))),
-            new DelegateProvider("broken", (_, _) => throw new InvalidOperationException("provider unavailable")));
+            new DelegateProvider("broken", (_, _) => throw new InvalidOperationException(secret)));
 
         Assert.Equal(WatchlistDecision.Error, result.Decision);
         var broken = Assert.Single(result.Providers, x => x.Provider == "broken");
         Assert.Equal(WatchlistDecision.Error, broken.Check.Decision);
-        Assert.Equal("provider unavailable", broken.Check.ErrorMessage);
+        Assert.Equal("Watchlist provider request failed.", broken.Check.ErrorMessage);
+        Assert.DoesNotContain(secret, broken.Check.ErrorMessage!, StringComparison.Ordinal);
         Assert.False(broken.TimedOut);
     }
 
