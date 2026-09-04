@@ -9,6 +9,7 @@ public sealed class ParallelWatchlistScreeningService(
     IWatchlistCheckRepository checks,
     IEnumerable<IWatchlistProvider> providers)
 {
+    private const string GenericProviderFailure = "Watchlist provider request failed.";
     private static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IReadOnlyList<IWatchlistProvider> _providers = providers
@@ -58,7 +59,7 @@ public sealed class ParallelWatchlistScreeningService(
         {
             var result = await provider.CheckAsync(passport, timeoutCts.Token);
             if (result.Decision is WatchlistDecision.NotChecked or WatchlistDecision.Error)
-                check.Fail(result.ErrorMessage ?? "Watchlist provider returned an invalid result.");
+                check.Fail(GenericProviderFailure);
             else
                 check.Complete(result.Decision, result.MatchReference);
 
@@ -69,9 +70,9 @@ public sealed class ParallelWatchlistScreeningService(
             check.Fail($"Watchlist provider timed out after {ProviderTimeout.TotalSeconds:0} seconds.");
             return CreateProviderResult(provider.Name, check, startedAt, timedOut: true);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            check.Fail(ex.Message);
+            check.Fail(GenericProviderFailure);
             return CreateProviderResult(provider.Name, check, startedAt, timedOut: false);
         }
     }
