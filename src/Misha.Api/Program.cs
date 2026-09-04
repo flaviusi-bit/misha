@@ -62,7 +62,11 @@ else
     });
 }
 builder.Services.AddScoped<IPassportVerificationProvider, HttpPassportVerificationProvider>();
-builder.Services.AddHttpClient("passport-verification", client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddHttpClient("passport-verification", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.MaxResponseContentBufferSize = 64 * 1024;
+});
 builder.Services.AddSingleton<IFastLaneVerificationCache, InMemoryFastLaneVerificationCache>();
 builder.Services.AddScoped<FastLaneVerificationService>();
 builder.Services.AddScoped<ApplicationService>(); builder.Services.AddScoped<DocumentService>(); builder.Services.AddScoped<PassportService>(); builder.Services.AddScoped<PassportVerificationService>(); builder.Services.AddScoped<WatchlistService>(); builder.Services.AddSingleton<IPolicyEngine, DefaultPolicyEngine>(); builder.Services.AddScoped<PolicyService>();
@@ -106,7 +110,7 @@ public sealed record RefuseApplicationRequest(string Reason);
 public sealed record ApplicationResponse(Guid Id, string ApplicantReference, string Status, DateTimeOffset CreatedAtUtc, DateTimeOffset? SubmittedAtUtc, DateTimeOffset? ProcessingStartedAtUtc, DateTimeOffset? DecidedAtUtc, DateTimeOffset? CancelledAtUtc, string? RefusalReason);
 public sealed record DocumentRequest(DocumentType DocumentType, string FileName, string ContentType, long SizeBytes, string Sha256, string StorageKey);
 public sealed record DocumentResponse(Guid Id, Guid ApplicationId, string DocumentType, string FileName, string ContentType, long SizeBytes, string Sha256, string StorageKey, DateTimeOffset CreatedAtUtc);
-public sealed record PassportRequest(string DocumentNumber, string IssuingCountry, string Surname, string GivenNames, DateOnly DateOfBirth, string Nationality, DateOnly ExpiryDate);
+public sealed record PassportRequest(string DocumentNumber, string IssuingCountry, string Surname, string GivenNames, DateOnly DateOfBirth, DateOnly ExpiryDate, string Nationality);
 public sealed record PassportResponse(Guid Id, Guid ApplicationId, string DocumentNumber, string IssuingCountry, string Surname, string GivenNames, DateOnly DateOfBirth, string Nationality, DateOnly ExpiryDate, bool IsExpired);
 public sealed record PassportVerificationResponse(string Decision, string? Reference, string? ErrorMessage);
 public sealed record WatchlistResponse(Guid Id, Guid ApplicationId, string Provider, string Decision, string? MatchReference, string? ErrorMessage, DateTimeOffset? CheckedAtUtc);
