@@ -8,6 +8,8 @@ public sealed class WatchlistService(
     IWatchlistCheckRepository checks,
     IWatchlistProvider provider)
 {
+    private const string GenericProviderFailure = "Watchlist provider request failed.";
+
     public async Task<WatchlistCheck> ScreenAsync(
         Guid applicationId,
         CancellationToken cancellationToken)
@@ -23,16 +25,16 @@ public sealed class WatchlistService(
             var result = await provider.CheckAsync(passport, cancellationToken);
             if (result.Decision is WatchlistDecision.NotChecked or WatchlistDecision.Error)
             {
-                check.Fail(result.ErrorMessage ?? "Watchlist provider returned an invalid result.");
+                check.Fail(GenericProviderFailure);
             }
             else
             {
                 check.Complete(result.Decision, result.MatchReference);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            check.Fail(ex.Message);
+            check.Fail(GenericProviderFailure);
         }
 
         await checks.SaveChangesAsync(cancellationToken);
