@@ -36,9 +36,8 @@ public sealed class PassportVerificationService(
 
             return result;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            _ = ex;
             return new PassportVerificationResult(
                 PassportVerificationDecision.Error,
                 ErrorMessage: GenericProviderFailure);
