@@ -59,7 +59,11 @@ builder.Services.AddScoped<IOutboxDispatcher>(sp => new SqsOutboxDispatcher(
     queueUrl,
     sp.GetRequiredService<ILogger<SqsOutboxDispatcher>>()));
 
-builder.Services.AddHttpClient<INotificationDelivery, HttpNotificationDelivery>();
+builder.Services.AddHttpClient<INotificationDelivery, HttpNotificationDelivery>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.MaxResponseContentBufferSize = 64 * 1024;
+});
 builder.Services.AddHostedService<NotificationDeliveryWorker>();
 builder.Services.AddScoped<IRetentionPurgeService, RetentionPurgeService>();
 builder.Services.AddHostedService<Worker>();
