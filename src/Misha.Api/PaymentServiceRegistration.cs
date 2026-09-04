@@ -13,6 +13,7 @@ public static class PaymentServiceRegistration
         services.AddHttpClient("payment-provider", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(10);
+            client.MaxResponseContentBufferSize = 64 * 1024;
         });
         services.AddScoped<PaymentService>();
     }
