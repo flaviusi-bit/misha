@@ -40,7 +40,11 @@ builder.Services.AddScoped<Misha.Application.Messaging.IOutboxWriter, EfOutboxWr
 builder.Services.AddScoped<IDocumentArtifactRepository, EfDocumentArtifactRepository>();
 builder.Services.AddScoped<IPassportRepository, EfPassportRepository>();
 builder.Services.AddScoped<IWatchlistCheckRepository, EfWatchlistCheckRepository>();
-builder.Services.AddHttpClient("watchlist", client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddHttpClient("watchlist", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.MaxResponseContentBufferSize = 64 * 1024;
+});
 var watchlistProviderSections = builder.Configuration.GetSection("Watchlist:Providers").GetChildren().ToArray();
 if (watchlistProviderSections.Length > 0)
 {
