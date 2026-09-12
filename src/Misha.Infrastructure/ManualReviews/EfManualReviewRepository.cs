@@ -26,8 +26,11 @@ public sealed class EfManualReviewRepository(
         return query.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ManualReviewCase>> GetOpenAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ManualReviewCase>> GetOpenAsync(int limit, CancellationToken cancellationToken)
     {
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
         var query = db.ManualReviewCases
             .AsNoTracking()
             .Where(x => x.Status == ManualReviewStatus.Pending || x.Status == ManualReviewStatus.InProgress);
@@ -43,6 +46,7 @@ public sealed class EfManualReviewRepository(
 
         return await query
             .OrderBy(x => x.CreatedAtUtc)
+            .Take(limit)
             .ToListAsync(cancellationToken);
     }
 

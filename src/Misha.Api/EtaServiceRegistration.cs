@@ -53,6 +53,10 @@ public static class EtaServiceRegistration
 
         app.MapPost("/applications/{id:guid}/eta/revoke", async (Guid id, EtaRevocationRequest request, ClaimsPrincipal user, EtaService service, CancellationToken ct) =>
         {
+            var validation = ApiRequestValidation.ValidateEtaRevocation(request);
+            if (validation is not null)
+                return Results.ValidationProblem(validation);
+
             try
             {
                 var actorReference = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub") ?? "authenticated-user";
@@ -79,6 +83,10 @@ public static class EtaServiceRegistration
 
         app.MapPost("/eta/verify", async (EtaVerificationRequest request, EtaService service, IEtaCredentialSigner signer, CancellationToken ct) =>
         {
+            var validation = ApiRequestValidation.ValidateEtaVerification(request);
+            if (validation is not null)
+                return Results.ValidationProblem(validation);
+
             var result = await service.VerifyAsync(request.EtaNumber, request.VerificationToken, ct);
             return result is null ? Results.NotFound() : Results.Ok(new EtaVerificationResponse(
                 result.EtaNumber, result.Status.ToString(), result.IssuedAtUtc, result.ExpiresAtUtc, result.RevokedAtUtc,

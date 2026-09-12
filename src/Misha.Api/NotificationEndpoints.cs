@@ -12,6 +12,10 @@ public static class NotificationEndpoints
             NotificationService service,
             CancellationToken ct) =>
         {
+            var validation = ApiRequestValidation.ValidateNotification(request);
+            if (validation is not null)
+                return Results.ValidationProblem(validation);
+
             try
             {
                 var notificationId = await service.QueueAsync(
@@ -38,7 +42,11 @@ public static class NotificationEndpoints
             NotificationService service,
             CancellationToken ct) =>
         {
-            var notifications = await service.GetPendingAsync(limit ?? 50, ct);
+            var boundedLimit = ApiRequestValidation.NormalizePageSize(
+                limit,
+                ApiRequestValidation.DefaultNotificationPageSize,
+                ApiRequestValidation.MaxNotificationPageSize);
+            var notifications = await service.GetPendingAsync(boundedLimit, ct);
             return Results.Ok(notifications.Select(x => new
             {
                 x.Id,
@@ -55,10 +63,10 @@ public static class NotificationEndpoints
             }));
         }).RequireAuthorization(AuthorizationPolicies.AdminRead);
     }
-
-    public sealed record QueueNotificationRequest(
-        string RecipientReference,
-        string Channel,
-        string Template,
-        string Payload);
 }
+
+public sealed record QueueNotificationRequest(
+    string RecipientReference,
+    string Channel,
+    string Template,
+    string Payload);
