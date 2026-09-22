@@ -37,9 +37,9 @@ public static class DecisionEndpoints
             {
                 return Results.Conflict(new { error = "Application changed while the decision was being applied. Re-evaluate before deciding again." });
             }
-            catch (InvalidOperationException ex)
+            catch (InvalidOperationException)
             {
-                return Results.Conflict(new { error = ex.Message });
+                return ApiErrorResponses.Conflict();
             }
         }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 

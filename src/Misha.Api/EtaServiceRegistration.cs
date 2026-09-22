@@ -42,7 +42,7 @@ public static class EtaServiceRegistration
                 return result.Created ? Results.Created($"/applications/{id}/eta", response) : Results.Ok(response);
             }
             catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
-            catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
+            catch (InvalidOperationException) { return ApiErrorResponses.BadRequest(); }
         }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
         app.MapGet("/applications/{id:guid}/eta", async (Guid id, EtaService service, IEtaCredentialSigner signer, CancellationToken ct) =>
@@ -61,7 +61,7 @@ public static class EtaServiceRegistration
             }
             catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
             catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
-            catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
+            catch (InvalidOperationException) { return ApiErrorResponses.BadRequest(); }
         }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 
         app.MapGet("/eta/verify/{etaNumber}", (HttpResponse response) =>
@@ -90,7 +90,7 @@ public static class EtaServiceRegistration
         {
             try { return Results.Ok(await service.CreatePackageAsync(id, ct)); }
             catch (KeyNotFoundException ex) { return Results.NotFound(new { error = ex.Message }); }
-            catch (InvalidOperationException ex) { return Results.BadRequest(new { error = ex.Message }); }
+            catch (InvalidOperationException) { return ApiErrorResponses.BadRequest(); }
         }).RequireAuthorization(AuthorizationPolicies.DecisionWrite);
 
         app.MapPost("/fast-lane/verify", (FastLanePackage package, FastLaneVerificationService verifier) =>

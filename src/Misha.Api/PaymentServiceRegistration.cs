@@ -39,9 +39,9 @@ public static class PaymentServiceRegistration
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
-            catch (InvalidOperationException ex)
+            catch (InvalidOperationException)
             {
-                return Results.BadRequest(new { error = ex.Message });
+                return ApiErrorResponses.BadRequest();
             }
         }).RequireAuthorization(AuthorizationPolicies.ApiWrite);
 

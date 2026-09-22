@@ -52,9 +52,9 @@ public static class ManualReviewEndpoints
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
-            catch (InvalidOperationException ex)
+            catch (InvalidOperationException)
             {
-                return Results.Conflict(new { error = ex.Message });
+                return ApiErrorResponses.Conflict();
             }
         }).RequireAuthorization(AuthorizationPolicies.ReviewWrite);
 
@@ -80,9 +80,9 @@ public static class ManualReviewEndpoints
             {
                 return Results.BadRequest(new { error = ex.Message });
             }
-            catch (InvalidOperationException ex)
+            catch (InvalidOperationException)
             {
-                return Results.Conflict(new { error = ex.Message });
+                return ApiErrorResponses.Conflict();
             }
         }).RequireAuthorization(AuthorizationPolicies.ReviewWrite);
     }
