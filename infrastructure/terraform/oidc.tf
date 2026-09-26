@@ -50,16 +50,6 @@ resource "aws_iam_role" "github_actions_deploy" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "github_actions_sns" {
-  role       = aws_iam_role.github_actions_deploy.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "github_actions_eventbridge" {
-  role       = aws_iam_role.github_actions_deploy.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess"
-}
-
 resource "aws_iam_role_policy" "github_actions_deploy" {
   name = "${local.name}-github-actions-deploy"
   role = aws_iam_role.github_actions_deploy.id
@@ -311,6 +301,28 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
         "elasticloadbalancing:CreateListener",
         "elasticloadbalancing:DeleteListener",
         "elasticloadbalancing:ModifyListener"
+      ], Resource = "*" },
+      { Effect = "Allow", Action = [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sns:Subscribe",
+        "sns:Unsubscribe",
+        "sns:ListSubscriptionsByTopic",
+        "sns:ListTagsForResource",
+        "sns:TagResource",
+        "sns:UntagResource"
+      ], Resource = "arn:aws:sns:${var.aws_region}:576984879588:${local.name}-*" },
+      { Effect = "Allow", Action = [
+        "events:DescribeRule",
+        "events:DeleteRule",
+        "events:ListTagsForResource",
+        "events:PutRule",
+        "events:PutTargets",
+        "events:RemoveTargets",
+        "events:TagResource",
+        "events:UntagResource"
       ], Resource = "*" },
       { Effect = "Allow", Action = [
         "cloudwatch:DescribeAlarms",
